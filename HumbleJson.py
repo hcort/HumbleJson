@@ -21,6 +21,9 @@ from bs4 import BeautifulSoup
 # https://www.humblebundle.com/books/home-sweet-home-quarto-books
 # https://www.humblebundle.com/books/multilanguage-tales-warhammer-2021-black-library-books
 # https://www.humblebundle.com/books/make-your-own-magic-inventions-make-co-books
+# https://www.humblebundle.com/humble-heal-covid-19-bundle
+# https://www.humblebundle.com/books/grilling-and-gardening-quarto-books
+# https://www.humblebundle.com/books/learn-you-more-python-books
 
 
 def order_humble_items(soup):
@@ -57,7 +60,9 @@ def get_bundle_dict(humble_url, is_file):
             exit(-1)
         soup = BeautifulSoup(current_page.text, features="html.parser")
         title_tiers = order_humble_items(soup)
-        bundle_vars = soup.find('script', {'id': 'webpack-bundle-data'})
+        # json_node_name = 'webpack-bundle-data'
+        json_node_name = 'webpack-bundle-page-data'
+        bundle_vars = soup.find('script', {'id': json_node_name})
         bundle_dict = json.loads(bundle_vars.string)
         bundle_dict['title_tiers'] = title_tiers
     return bundle_dict
@@ -69,13 +74,17 @@ def build_bundle_dict(humble_items):
         try:
             items_dict[item['machine_name']] = {
                 'name': item['human_name'],
-                'author': generate_author_publisher_string(item['developers'], 'developer_name', 'developer_url'),
-                'publisher': generate_author_publisher_string(item['publishers'], 'publisher_name',
-                                                              'publisher_url'),
+                # 'author': generate_author_publisher_string(item['developers'], 'developer_name', 'developer_url'),
+                # 'publisher': generate_author_publisher_string(item['publishers'], 'publisher_name',
+                #                                               'publisher_url'),
+                'author': item['developers'][0].get('developer-name', ''),
+                'author_url': item['developers'][0].get('developer-url', ''),
+                'publisher': item['publishers'][0].get('publisher-name', ''),
+                'publisher_url': item['publishers'][0].get('publisher-url', ''),
                 'description': item['description_text']
             }
         except Exception as e:
-            # print('Error en display_items: ' + str(e))
+            print('Error en display_items: ' + str(e))
             pass
     return items_dict
 
@@ -89,7 +98,7 @@ def item_in_bundle_dict_to_str(item):
 
 
 def print_bundle_dict(bundle_dict):
-    title_tiers = bundle_dict['title_tiers']
+    title_tiers = bundle_dict.get('title_tiers', None)
     if title_tiers:
         for idx, tier in enumerate(title_tiers):
             print('\n\n\n\nTIER ' + str(idx) + '\n\n')
@@ -108,23 +117,22 @@ def get_humble(humble_url, is_file=False):
     title_tiers = None
     bundle_dict = get_bundle_dict(humble_url, is_file)
     try:
-        humble_name = bundle_dict['bundleVars']['product_human_name']
-        humble_items = bundle_dict['bundleVars']['slideout_data']['display_items']
+        humble_name = bundle_dict['bundleData']['basic_data']['human_name']
+        humble_items = bundle_dict['bundleData']['tier_item_data']
         print(humble_name + '\t(' + humble_url + ')')
         items_dict = build_bundle_dict(humble_items.values())
-        print_bundle_dict(items_dict)
+        # print_bundle_dict(items_dict, bundle_dict.get('title_tiers', None))
+        return items_dict
     except Exception as e:
-        print(str(e))
+        print('Exception in get_humble: ' + str(e))
 
 
 def main():
     list_of_urls = [
-        'https://www.humblebundle.com/books/stuff-that-kids-love-adams-media-books',
-        'https://www.humblebundle.com/books/lets-cook-together-books',
-        'https://www.humblebundle.com/books/learn-you-more-code-no-starch-press-books'
+        'https://www.humblebundle.com/books/ultimate-survival-guides-weldon-owns-books'
     ]
     for url in list_of_urls:
-        get_humble(url)
+        print_bundle_dict(get_humble(url))
 
 
 # Lanzamos la función principal
