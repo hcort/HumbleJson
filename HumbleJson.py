@@ -7,10 +7,11 @@ Al leer una página de Humble Bundle los datos de cada producto están en el sig
 </script>
 
 """
-import json
-
-import requests
+from json import load, loads
+from sys import argv
+from requests import Session, codes
 from bs4 import BeautifulSoup
+from waybackpy import Url
 
 
 # https://www.humblebundle.com/books/diy-maker-school-make-co-books
@@ -24,6 +25,7 @@ from bs4 import BeautifulSoup
 # https://www.humblebundle.com/humble-heal-covid-19-bundle
 # https://www.humblebundle.com/books/grilling-and-gardening-quarto-books
 # https://www.humblebundle.com/books/learn-you-more-python-books
+# https://www.humblebundle.com/books/life-hacks-adams-books
 
 
 def order_humble_items(soup):
@@ -52,18 +54,18 @@ def get_bundle_dict(humble_url, is_file):
     if is_file:
         # leo el JSON desde un fichero
         with open(humble_url, "r") as content:
-            bundle_dict = json.load(content)
+            bundle_dict = load(content)
     else:
-        session = requests.Session()
+        session = Session()
         current_page = session.get(humble_url)
-        if current_page.status_code != requests.codes.ok:
+        if current_page.status_code != codes.ok:
             exit(-1)
         soup = BeautifulSoup(current_page.text, features="html.parser")
         title_tiers = order_humble_items(soup)
         # json_node_name = 'webpack-bundle-data'
         json_node_name = 'webpack-bundle-page-data'
         bundle_vars = soup.find('script', {'id': json_node_name})
-        bundle_dict = json.loads(bundle_vars.string)
+        bundle_dict = loads(bundle_vars.string)
         bundle_dict['title_tiers'] = title_tiers
     return bundle_dict
 
@@ -77,10 +79,10 @@ def build_bundle_dict(humble_items):
                 # 'author': generate_author_publisher_string(item['developers'], 'developer_name', 'developer_url'),
                 # 'publisher': generate_author_publisher_string(item['publishers'], 'publisher_name',
                 #                                               'publisher_url'),
-                'author': item['developers'][0].get('developer-name', ''),
-                'author_url': item['developers'][0].get('developer-url', ''),
-                'publisher': item['publishers'][0].get('publisher-name', ''),
-                'publisher_url': item['publishers'][0].get('publisher-url', ''),
+                'author': item['developers'][0].get('developer-name', '') if item['developers'] else '',
+                'author_url': item['developers'][0].get('developer-url', '') if item['developers'] else '',
+                'publisher': item['publishers'][0].get('publisher-name', '') if item['publishers'] else '',
+                'publisher_url': item['publishers'][0].get('publisher-url', '') if item['publishers'] else '',
                 'description': item['description_text']
             }
         except Exception as e:
@@ -128,11 +130,23 @@ def get_humble(humble_url, is_file=False):
 
 
 def main():
-    list_of_urls = [
-        'https://www.humblebundle.com/books/ultimate-survival-guides-weldon-owns-books'
-    ]
+    list_of_urls = []
+    if len(argv) > 1:
+        list_of_urls = argv[1:]
     for url in list_of_urls:
+        print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
+        try:
+            # archive usign archive.org
+            user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
+                         "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                         "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
+            wayback = Url(url, user_agent)  # created the waybackpy instance.
+            archive = wayback.save()  # saved the link to the internet archive
+            print(archive.archive_url)  # printed the URL.
+        except Exception as e:
+            print('Error saving URL to archive ' + str(e))
         print_bundle_dict(get_humble(url))
+        print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
 
 
 # Lanzamos la función principal
