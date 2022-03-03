@@ -7,6 +7,7 @@ Al leer una página de Humble Bundle los datos de cada producto están en el sig
 </script>
 
 """
+from LibGen import search_libgen_by_title
 from json import load, loads
 from sys import argv
 from requests import Session, codes
@@ -26,6 +27,7 @@ from waybackpy import Url
 # https://www.humblebundle.com/books/grilling-and-gardening-quarto-books
 # https://www.humblebundle.com/books/learn-you-more-python-books
 # https://www.humblebundle.com/books/life-hacks-adams-books
+# https://www.humblebundle.com/books/creative-cooking-open-road-media-books
 
 
 def order_humble_items(soup):
@@ -91,12 +93,12 @@ def build_bundle_dict(humble_items):
     return items_dict
 
 
-def item_in_bundle_dict_to_str(item):
+def item_in_bundle_dict_to_str(item, print_desc=False):
     return "{name} - {author}. [{pub}]\n{desc}".format(
         name=item['name'],
         author=item['author'],
         pub=item['publisher'],
-        desc=item['description'])
+        desc=item['description'] if print_desc else '')
 
 
 def print_bundle_dict(bundle_dict):
@@ -111,6 +113,8 @@ def print_bundle_dict(bundle_dict):
     else:
         for item in bundle_dict.values():
             print(item_in_bundle_dict_to_str(item))
+            books_found = search_libgen_by_title(item['name'])
+            print(books_found)
             print('------------------------------------------------')
 
 
@@ -130,21 +134,27 @@ def get_humble(humble_url, is_file=False):
 
 
 def main():
+    archive = False
+    url_index = 1
     list_of_urls = []
     if len(argv) > 1:
-        list_of_urls = argv[1:]
+        if argv[1] == '-a':
+            archive = True
+            url_index = 2
+        list_of_urls = argv[url_index:]
     for url in list_of_urls:
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
-        try:
-            # archive usign archive.org
-            user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
-                         "AppleWebKit/537.36 (KHTML, like Gecko) " \
-                         "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
-            wayback = Url(url, user_agent)  # created the waybackpy instance.
-            archive = wayback.save()  # saved the link to the internet archive
-            print(archive.archive_url)  # printed the URL.
-        except Exception as e:
-            print('Error saving URL to archive ' + str(e))
+        if archive:
+            try:
+                # archive usign archive.org
+                user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
+                             "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                             "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
+                wayback = Url(url, user_agent)  # created the waybackpy instance.
+                archive = wayback.save()  # saved the link to the internet archive
+                print(archive.archive_url)  # printed the URL.
+            except Exception as e:
+                print('Error saving URL to archive ' + str(e))
         print_bundle_dict(get_humble(url))
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
 
