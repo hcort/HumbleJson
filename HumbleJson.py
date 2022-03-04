@@ -31,22 +31,6 @@ from waybackpy import Url
 # https://www.humblebundle.com/books/creative-cooking-open-road-media-books
 
 
-def order_humble_items(soup):
-    # div class="main-content-row dd-game-row js-nav-row"
-    # div class="dd-image-box-list js-slideout-items-row"
-    # <div class="dd-image-box-figure u-lazy-load s-loaded" data-slideout="...">
-    # titles = [[], [], []]
-    layer_divs = soup.find_all("div", class_="main-content-row dd-game-row js-nav-row", recursive=True)
-    # titles = [[]] * len(layer_divs) # esto hace que todos los elementos de la lista sean "punteros" a la misma lista
-    titles = [[] for _ in range(len(layer_divs))]
-    for idx, layer in enumerate(layer_divs):
-        inner_divs = layer.find_all('div', class_="dd-image-box-figure u-lazy-load", recursive=True)
-        for inner_div in inner_divs:
-            item_name = inner_div['data-slideout']
-            titles[idx].append(item_name)
-    return titles
-
-
 def generate_author_publisher_string(list_of_names, key1, key2):
     return ','.join(map(lambda item_in_list: "{key1} ({key2})".format(
         key1=item_in_list.get(key1, ''),
@@ -54,6 +38,7 @@ def generate_author_publisher_string(list_of_names, key1, key2):
 
 
 def get_bundle_dict(humble_url, is_file):
+    bundle_dict = {}
     if is_file:
         # leo el JSON desde un fichero
         with open(humble_url, "r") as content:
@@ -64,24 +49,27 @@ def get_bundle_dict(humble_url, is_file):
         if current_page.status_code != codes.ok:
             exit(-1)
         soup = BeautifulSoup(current_page.text, features="html.parser")
-        title_tiers = order_humble_items(soup)
-        # json_node_name = 'webpack-bundle-data'
+        # tiers no longer present in HTML code
+        # title_tiers = order_humble_items(soup)
         json_node_name = 'webpack-bundle-page-data'
         bundle_vars = soup.find('script', {'id': json_node_name})
-        bundle_dict = loads(bundle_vars.string)
-        bundle_dict['title_tiers'] = title_tiers
+        whole_bundle_dict = loads(bundle_vars.string)
+        bundle_dict = {
+            'name': whole_bundle_dict.get('bundleData', {}).get('basic_data', {}).get('human_name', ''),
+            'tier_item_data': whole_bundle_dict.get('bundleData', {}).get('tier_item_data', {}),
+            'tier_order': whole_bundle_dict.get('bundleData', {}).get('tier_order', []),
+            'tier_display_data': whole_bundle_dict.get('bundleData', {}).get('tier_display_data', {})
+        }
     return bundle_dict
 
 
 def build_bundle_dict(humble_items):
     items_dict = {}
-    for item in humble_items:
+    for key in humble_items:
         try:
-            items_dict[item['machine_name']] = {
+            item = humble_items[key]
+            items_dict[key] = {
                 'name': item['human_name'],
-                # 'author': generate_author_publisher_string(item['developers'], 'developer_name', 'developer_url'),
-                # 'publisher': generate_author_publisher_string(item['publishers'], 'publisher_name',
-                #                                               'publisher_url'),
                 'author': item['developers'][0].get('developer-name', '') if item['developers'] else '',
                 'author_url': item['developers'][0].get('developer-url', '') if item['developers'] else '',
                 'publisher': item['publishers'][0].get('publisher-name', '') if item['publishers'] else '',
@@ -95,6 +83,8 @@ def build_bundle_dict(humble_items):
 
 
 def item_in_bundle_dict_to_str(item, print_desc=False):
+    if not item:
+        return '***************ITEM DOES NOT EXIST***************'
     return "{name} - {author}. [{pub}]\n{desc}".format(
         name=item['name'],
         author=item['author'],
@@ -102,22 +92,39 @@ def item_in_bundle_dict_to_str(item, print_desc=False):
         desc=item['description'] if print_desc else '')
 
 
+def print_bundle_item(item):
+    print(item_in_bundle_dict_to_str(item))
+    books_found = search_libgen_by_title(item['name'])
+    filtered_books = filter_search_results(item, books_found)
+    print(filtered_books)
+    print('------------------------------------------------')
+
+
+def clean_upper_tiers(bundle_dict):
+    # bigger tiers contain smaller tiers
+    # tier content: tier_1 = ['a', 'b'], tier_2 = ['a', 'b', 'c', 'd'], tier_3 = ['a', 'b', 'c', 'd', 'e', ...]
+    for tier in reversed(bundle_dict['tier_order']):
+        small_tier_items = bundle_dict['tier_display_data'][tier]['tier_item_machine_names']
+        for other_tier in bundle_dict['tier_display_data']:
+            if tier != other_tier:
+                large_tier_list = bundle_dict['tier_display_data'][other_tier]['tier_item_machine_names']
+                bundle_dict['tier_display_data'][other_tier]['tier_item_machine_names'] = list(
+                    filter(lambda x: x not in small_tier_items, large_tier_list))
+
+
 def print_bundle_dict(bundle_dict):
-    title_tiers = bundle_dict.get('title_tiers', None)
-    if title_tiers:
-        for idx, tier in enumerate(title_tiers):
+    tiers = bundle_dict['tier_display_data']
+    if tiers:
+        clean_upper_tiers(bundle_dict)
+        for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
+            tier_components = tiers[tier].get('tier_item_machine_names', [])
             print('\n\n\n\nTIER ' + str(idx) + '\n\n')
-            for name in tier:
-                item = bundle_dict[name]
-                print(item_in_bundle_dict_to_str(item))
-                print('------------------------------------------------')
+            for name in tier_components:
+                item = bundle_dict['tier_item_data'].get(name, None)
+                print_bundle_item(item)
     else:
-        for item in bundle_dict.values():
-            print(item_in_bundle_dict_to_str(item))
-            books_found = search_libgen_by_title(item['name'])
-            filtered_books = filter_search_results(item, books_found)
-            print(filtered_books)
-            print('------------------------------------------------')
+        for item in bundle_dict['tier_item_data']:
+            print_bundle_item(item)
 
 
 def get_humble(humble_url, is_file=False):
@@ -125,14 +132,13 @@ def get_humble(humble_url, is_file=False):
     title_tiers = None
     bundle_dict = get_bundle_dict(humble_url, is_file)
     try:
-        humble_name = bundle_dict['bundleData']['basic_data']['human_name']
-        humble_items = bundle_dict['bundleData']['tier_item_data']
-        print(humble_name + '\t(' + humble_url + ')')
-        items_dict = build_bundle_dict(humble_items.values())
-        # print_bundle_dict(items_dict, bundle_dict.get('title_tiers', None))
-        return items_dict
+        print(bundle_dict['name'] + '\t(' + humble_url + ')')
+        items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
+        bundle_dict['tier_item_data'] = items_dict
+        return bundle_dict
     except Exception as e:
         print('Exception in get_humble: ' + str(e))
+    return {}
 
 
 def main():
