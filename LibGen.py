@@ -1,8 +1,9 @@
 import re
+from functools import reduce
 from urllib.parse import urlencode, quote
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 base_url = "http://libgen.rs/"
 
@@ -13,7 +14,8 @@ ids_location_detailed_view = 'tr:nth-child(8) td:last-child'
 
 titles_location_fiction = 'table.catalog td:nth-of-type(3) a'
 # TODO if more than one author they appear as a list
-authors_location_fiction = '.catalog_authors li a'
+# authors_location_fiction = '.catalog_authors li a'
+authors_location_fiction = '.catalog_authors'
 
 items_found_selector = "body table:nth-of-type(2) td:nth-child(1) font"
 items_found_selector_fiction = ".catalog_paginator div:first-child"
@@ -21,12 +23,20 @@ goto_fiction_selector = "body table:nth-of-type(2) td:nth-child(3) font a"
 last_page_selector = '#paginator_example_top td span a'
 
 
+def append_author_string(x, y):
+    authors_str = x if type(x) is str else ''
+    if type(x) is Tag:
+        authors_str = '{0}; {1}'.format(authors_str, x.text) if authors_str != '' else x.text
+    if type(y) is Tag:
+        authors_str = '{0}; {1}'.format(authors_str, y.text) if authors_str != '' else y.text
+    return authors_str
+
+
 def expand_tuple_into_dict(title, author, publisher=None, is_fiction=True):
-    # print('{0}\t{1}\t{2}'.format(extract_md5_from_title(title, is_fiction), title.text, author.text))
     if is_fiction:
         return {
             'title': title.text,
-            'author': author.text,
+            'author': reduce(append_author_string, author.contents),
             'publisher': '',
             'url': base_url + title.get('href')
         }
@@ -35,7 +45,7 @@ def expand_tuple_into_dict(title, author, publisher=None, is_fiction=True):
             'title': title.text,
             'author': author.text,
             'publisher': publisher.text if publisher else '',
-            'url':  title.get('href', '').replace('../', base_url, 1)
+            'url': title.get('href', '').replace('../', base_url, 1)
         }
 
 
@@ -53,7 +63,7 @@ def get_search_in_fiction_link(soup):
 def generate_url_list(start_url, page_number):
     pending_pages = []
     if page_number > 1:
-        for i in range(2, page_number+1):
+        for i in range(2, page_number + 1):
             pending_pages.append(start_url + "&page=" + str(i))
     return pending_pages
 
