@@ -7,6 +7,7 @@ Al leer una página de Humble Bundle los datos de cada producto están en el sig
 </script>
 
 """
+from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
 from json import load, loads
 from sys import argv
@@ -114,7 +115,8 @@ def print_bundle_dict(bundle_dict):
         for item in bundle_dict.values():
             print(item_in_bundle_dict_to_str(item))
             books_found = search_libgen_by_title(item['name'])
-            print(books_found)
+            filtered_books = filter_search_results(item, books_found)
+            print(filtered_books)
             print('------------------------------------------------')
 
 
