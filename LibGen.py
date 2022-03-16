@@ -32,13 +32,20 @@ def append_author_string(x, y):
     return authors_str
 
 
+def build_url(libgen_url, title):
+    if libgen_url[-1] == '/' and title[0] == '/':
+        return libgen_url[:-1] + title
+    else:
+        return libgen_url + title
+
+
 def expand_tuple_into_dict(title, author, publisher=None, is_fiction=True):
     if is_fiction:
         return {
             'title': title.text,
             'author': reduce(append_author_string, author.contents),
             'publisher': '',
-            'url': base_url + title.get('href')
+            'url': build_url(base_url, title.get('href'))
         }
     else:
         return {
