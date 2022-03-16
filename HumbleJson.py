@@ -116,8 +116,7 @@ def print_bundle_item(bundle_data=None, item=None):
     for md5 in filtered_books:
         if not run_parameters['libgen_mirrors']:
             run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
-        get_file_from_url(run_parameters=run_parameters, bundle_data=bundle_data,
-                          book_url=filtered_books[md5]['url'], md5=md5)
+        get_file_from_url(run_parameters=run_parameters, bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
     print('------------------------------------------------')
 
 

@@ -65,8 +65,8 @@ def get_download_link_from_library_lol(run_parameters, book_url, md5, path):
         get_book(download_link, path, filename)
 
 
-def get_download_link_from_libgen_rocks(run_parameters, book_url, md5, path):
-    url_parts = urlparse(book_url)
+def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
+    url_parts = urlparse(book['url'])
     # we need md5 and key parameters to generate a valid URL
     download_page_url = '{}://{}/ads.php?md5={}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], md5)
     soup = get_soup_from_page(download_page_url)
@@ -74,32 +74,48 @@ def get_download_link_from_libgen_rocks(run_parameters, book_url, md5, path):
     if get_link:
         download_link = '{}://{}/{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], get_link[0]['href'])
         # this link doesn't have a filename
-        get_book(download_link, path, filename='', md5=md5)
+        get_book(download_link, path, filename='', extension=book['extension'], md5=md5)
 
 
 def get_filename_from_header(request, md5):
     # this works in the library_lol mirror
     header = request.headers.get('Content-Disposition', '')
     if header:
-        return header[23:-1]
+        if header[22] == ' ':
+            return header[23:-1]
+        else:
+            return header[22:-1]
     return md5
 
 
-def get_book(book_url, path, filename, md5):
+def generate_filename(path, filename, extension):
+    name = os.path.join(path, filename)
+    numbered_name = name
+    if os.path.exists(name):
+        name_without_ext = name[:name.rfind('.')]
+        idx = 0
+        while os.path.exists(numbered_name):
+            idx += 1
+            numbered_name = '{}_{}.{}'.format(name_without_ext, idx, extension)
+    return numbered_name
+
+
+def get_book(book_url, path, filename, extension, md5):
     if book_url:
         print('Requesting book from {}'.format(book_url))
         file_req = requests.get(book_url, timeout=60 * 5)
         if not filename:
             filename = get_filename_from_header(file_req, md5)
         if file_req.status_code == codes.ok:
-            with open(os.path.join(path, filename), 'wb') as f:
+            full_filename = generate_filename(path, filename, extension)
+            with open(full_filename, 'wb') as f:
                 f.write(file_req.content)
             print('Book downloaded successfully from {} to {}'.format(book_url, os.path.join(path, filename)))
 
 
-def get_file_from_url(run_parameters, bundle_data, book_url, md5):
+def get_file_from_url(run_parameters, bundle_data, book, md5):
     if (not run_parameters) or (not run_parameters['libgen_mirrors']) or \
-            (not bundle_data) or (not book_url) or (not md5):
+            (not bundle_data) or (not book['url']) or (not md5):
         return
     path = get_output_path(run_parameters=run_parameters, bundle_name=bundle_data.get('machine_name', ''))
-    get_download_link_from_libgen_rocks(run_parameters=run_parameters, book_url=book_url, md5=md5, path=path)
+    get_download_link_from_libgen_rocks(run_parameters=run_parameters, book=book, md5=md5, path=path)

@@ -11,11 +11,14 @@ titles_location_detailed_view = 'td:nth-child(3) b a'
 authors_location_detailed_view = 'tr:nth-child(3) td+ td'
 publisher_location_detailed_view = "tr:nth-child(5) td:nth-child(2)"
 ids_location_detailed_view = 'tr:nth-child(8) td:last-child'
+extension_location_detailed_view = 'tr:nth-of-type(10) td:last-child'
+extension_location_normal_view = '.c td:nth-child(9)'
 
 titles_location_fiction = 'table.catalog td:nth-of-type(3) a'
 # TODO if more than one author they appear as a list
 # authors_location_fiction = '.catalog_authors li a'
 authors_location_fiction = '.catalog_authors'
+extension_location_fiction = '.catalog tbody td:nth-of-type(5)'
 
 items_found_selector = "body table:nth-of-type(2) td:nth-child(1) font"
 items_found_selector_fiction = ".catalog_paginator div:first-child"
@@ -39,12 +42,20 @@ def build_url(libgen_url, title):
         return libgen_url + title
 
 
-def expand_tuple_into_dict(title, author, publisher=None, is_fiction=True):
+def parse_extension_fiction(text):
+    # extension = "AAA / Size"
+    if text:
+        return text[:text.find(' /')].lower()
+    return ''
+
+
+def expand_tuple_into_dict(title, author, extension, publisher=None, is_fiction=True):
     if is_fiction:
         return {
             'title': title.text,
             'author': reduce(append_author_string, author.contents),
             'publisher': '',
+            'extension': parse_extension_fiction(extension.text),
             'url': build_url(base_url, title.get('href'))
         }
     else:
@@ -52,6 +63,7 @@ def expand_tuple_into_dict(title, author, publisher=None, is_fiction=True):
             'title': title.text,
             'author': author.text,
             'publisher': publisher.text if publisher else '',
+            'extension': extension.text.lower(),
             'url': title.get('href', '').replace('../', base_url, 1)
         }
 
@@ -161,13 +173,15 @@ def search_libgen(url, is_fiction=False):
             if is_fiction:
                 title_list = soup.select(titles_location_fiction)
                 author_list = soup.select(authors_location_fiction)
+                extension_list = soup.select(extension_location_fiction)
                 # no publishers or ids
-                zipped = zip(title_list, author_list)
+                zipped = zip(title_list, author_list, extension_list)
             else:
                 title_list = soup.select(titles_location_detailed_view)
                 author_list = soup.select(authors_location_detailed_view)
                 publisher_list = soup.select(publisher_location_detailed_view)
-                zipped = zip(title_list, author_list, publisher_list)
+                extension_list = soup.select(extension_location_detailed_view)
+                zipped = zip(title_list, author_list, extension_list, publisher_list)
             new_dict = {extract_md5_from_title(z[0], is_fiction): zip_tuple_to_dict(z, is_fiction) for z in zipped}
             all_books.update(new_dict)
             soup = None
