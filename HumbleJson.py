@@ -59,8 +59,12 @@ def get_bundle_dict(humble_url, is_file):
         session = Session()
         current_page = session.get(humble_url)
         if current_page.status_code != codes.ok:
+            print('Failed to get {}'.format(humble_url))
             exit(-1)
         soup = BeautifulSoup(current_page.text, features="html.parser")
+        if not soup:
+            print('Failed to get {}'.format(humble_url))
+            return bundle_dict
         # tiers no longer present in HTML code
         # title_tiers = order_humble_items(soup)
         json_node_name = 'webpack-bundle-page-data'
@@ -74,6 +78,8 @@ def get_bundle_dict(humble_url, is_file):
                 'tier_order': whole_bundle_dict.get('bundleData', {}).get('tier_order', []),
                 'tier_display_data': whole_bundle_dict.get('bundleData', {}).get('tier_display_data', {})
             }
+        else:
+            print('JSON info in {} not found.'.format(json_node_name))
     return bundle_dict
 
 
