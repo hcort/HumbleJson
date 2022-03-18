@@ -1,11 +1,9 @@
 import re
 from functools import reduce
-from urllib.parse import urlencode, quote
+from urllib.parse import quote
+from bs4 import Tag
 
-import requests
-from bs4 import BeautifulSoup, Tag
-
-base_url = "http://libgen.rs/"
+from utils import get_soup_from_page, run_parameters
 
 titles_location_detailed_view = 'td:nth-child(3) b a'
 authors_location_detailed_view = 'tr:nth-child(3) td+ td'
@@ -56,7 +54,7 @@ def expand_tuple_into_dict(title, author, extension, publisher=None, is_fiction=
             'author': reduce(append_author_string, author.contents),
             'publisher': '',
             'extension': parse_extension_fiction(extension.text),
-            'url': build_url(base_url, title.get('href'))
+            'url': build_url(run_parameters['libgen_base'], title.get('href'))
         }
     else:
         return {
@@ -64,7 +62,7 @@ def expand_tuple_into_dict(title, author, extension, publisher=None, is_fiction=
             'author': author.text,
             'publisher': publisher.text if publisher else '',
             'extension': extension.text.lower(),
-            'url': title.get('href', '').replace('../', base_url, 1)
+            'url': title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
         }
 
 
@@ -76,7 +74,7 @@ def get_search_in_fiction_link(soup):
     goto_fiction_link = soup.select_one(goto_fiction_selector)
     if not goto_fiction_link:
         return ''
-    return base_url + goto_fiction_link['href']
+    return run_parameters['libgen_base'] + goto_fiction_link['href']
 
 
 def generate_url_list(start_url, page_number):
@@ -104,7 +102,7 @@ def get_page_count(soup, start_url, is_fiction=False):
     if is_fiction:
         num_last_page = re.match('page 1\s*/\s*([0-9]+)', last_page_link[0].text)
         next_page_link = soup.select('.catalog_paginator a')
-        next_page_url = base_url[:-1] + re.sub('&page=([0-9]+)', '', next_page_link[0]['href'])
+        next_page_url = run_parameters['libgen_base'][:-1] + re.sub('&page=([0-9]+)', '', next_page_link[0]['href'])
     else:
         lines_split = re.split('\r\n', last_page_link[0].string)
         num_last_page = re.match('\s+([0-9]+),', lines_split[3])
@@ -127,15 +125,6 @@ def get_found_items(soup, is_fiction=False):
     return num_items.group(1)
 
 
-def get_soup_from_page(current_url):
-    req = requests.get(current_url)
-    if req.status_code != requests.codes.ok:
-        return None
-    response = req.content
-    soup = BeautifulSoup(response, 'html.parser', from_encoding='utf-8')
-    return soup
-
-
 def extract_md5_from_title(title, is_fiction=False):
     title_url = title.get('href', '')
     if not title_url:
@@ -149,6 +138,31 @@ def extract_md5_from_title(title, is_fiction=False):
     return md5.group(1)
 
 
+def create_zipped_list(soup, is_fiction):
+    if is_fiction:
+        title_list = soup.select(titles_location_fiction)
+        author_list = soup.select(authors_location_fiction)
+        extension_list = soup.select(extension_location_fiction)
+        # no publishers or ids
+        zipped = zip(title_list, author_list, extension_list)
+    else:
+        title_list = soup.select(titles_location_detailed_view)
+        author_list = soup.select(authors_location_detailed_view)
+        publisher_list = soup.select(publisher_location_detailed_view)
+        extension_list = soup.select(extension_location_detailed_view)
+        zipped = zip(title_list, author_list, extension_list, publisher_list)
+    return zipped
+
+
+def get_fiction_results(soup, is_fiction):
+    if not is_fiction:
+        search_fiction_link = get_search_in_fiction_link(soup)
+        fiction_dict = search_libgen(search_fiction_link, is_fiction=True)
+        return fiction_dict
+    else:
+        return {}
+
+
 def search_libgen(url, is_fiction=False):
     all_books = {}
     page_number = 1
@@ -158,32 +172,17 @@ def search_libgen(url, is_fiction=False):
         print('Unable to connecto to LibGen {}'.format(url_with_page))
         return all_books
     num_items = get_found_items(soup, is_fiction)
-    if not is_fiction:
-        search_fiction_link = get_search_in_fiction_link(soup)
-        fiction_dict = search_libgen(search_fiction_link, is_fiction=True)
-        all_books.update(fiction_dict)
+    all_books.update(get_fiction_results(soup, is_fiction=is_fiction))
     if num_items != '0':
         pending_pages = [url_with_page] + get_page_count(soup, url, is_fiction)
         while pending_pages:
             current_url = pending_pages.pop(0)
-            # print('--------------------' + current_url + '---------------------')
             if not soup:
                 soup = get_soup_from_page(current_url)
             if not soup:
                 print('Unable to connecto to LibGen {}'.format(url_with_page))
                 continue
-            if is_fiction:
-                title_list = soup.select(titles_location_fiction)
-                author_list = soup.select(authors_location_fiction)
-                extension_list = soup.select(extension_location_fiction)
-                # no publishers or ids
-                zipped = zip(title_list, author_list, extension_list)
-            else:
-                title_list = soup.select(titles_location_detailed_view)
-                author_list = soup.select(authors_location_detailed_view)
-                publisher_list = soup.select(publisher_location_detailed_view)
-                extension_list = soup.select(extension_location_detailed_view)
-                zipped = zip(title_list, author_list, extension_list, publisher_list)
+            zipped = create_zipped_list(soup, is_fiction)
             new_dict = {extract_md5_from_title(z[0], is_fiction): zip_tuple_to_dict(z, is_fiction) for z in zipped}
             all_books.update(new_dict)
             soup = None
@@ -191,6 +190,8 @@ def search_libgen(url, is_fiction=False):
 
 
 def search_libgen_by_title(title):
+    if not run_parameters:
+        return {}
     page = '1'
     items_per_page = 100
     # query can be 'title', 'author', 'publisher'
@@ -198,6 +199,6 @@ def search_libgen_by_title(title):
     # language=English
     # format=mobi, format=epub
     urlencoded_query = quote(title.encode('utf-8'))
-    searchUrl = base_url + "/search.php?&req=" + urlencoded_query + "&res=" + str(items_per_page) + \
-                '&column=' + query + "&phrase=1&view=detailed"
-    return search_libgen(searchUrl)
+    search_url = run_parameters['libgen_base'] + "/search.php?&req=" + urlencoded_query + "&res=" + \
+                 str(items_per_page) + '&column=' + query + "&phrase=1&view=detailed"
+    return search_libgen(search_url)

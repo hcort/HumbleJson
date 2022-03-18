@@ -7,46 +7,39 @@ Al leer una página de Humble Bundle los datos de cada producto están en el sig
 </script>
 
 """
-import getopt
-import sys
+import os
 
-from FilterSearchResults import filter_search_results
-from LibGen import search_libgen_by_title, base_url
-from LibGenDownload import get_mirror_list, get_file_from_url
-from json import load, loads
-from sys import argv
-from requests import Session, codes
-from bs4 import BeautifulSoup
 from waybackpy import Url
 
-
-# https://www.humblebundle.com/books/diy-maker-school-make-co-books
-# https://www.humblebundle.com/books/fall-for-crafting-open-road-media-books
-# https://www.humblebundle.com/books/raspberry-pi-press-gaming-books
-# https://www.humblebundle.com/books/learn-to-code-the-fun-way-no-starch-press-books
-# https://www.humblebundle.com/books/start-something-new-chronicle-books
-# https://www.humblebundle.com/books/home-sweet-home-quarto-books
-# https://www.humblebundle.com/books/multilanguage-tales-warhammer-2021-black-library-books
-# https://www.humblebundle.com/books/make-your-own-magic-inventions-make-co-books
-# https://www.humblebundle.com/humble-heal-covid-19-bundle
-# https://www.humblebundle.com/books/grilling-and-gardening-quarto-books
-# https://www.humblebundle.com/books/learn-you-more-python-books
-# https://www.humblebundle.com/books/life-hacks-adams-books
-# https://www.humblebundle.com/books/creative-cooking-open-road-media-books
-
-run_parameters = {
-    'bundles': [],
-    'libgen_base': base_url,
-    'libgen_mirrors': [],
-    'output_dir': '',
-    'archive': False
-}
+import json
+from FilterSearchResults import filter_search_results
+from LibGen import search_libgen_by_title
+from LibGenDownload import get_mirror_list, get_file_from_url, get_output_path
+from json import load, loads
+from utils import get_soup_from_page, parse_arguments, run_parameters
 
 
 def generate_author_publisher_string(list_of_names, key1, key2):
     return ','.join(map(lambda item_in_list: "{key1} ({key2})".format(
         key1=item_in_list.get(key1, ''),
         key2=item_in_list.get(key2, '')), list_of_names))
+
+
+def extract_humble_dict_from_soup(soup):
+    json_node_name = 'webpack-bundle-page-data'
+    bundle_vars = soup.find('script', {'id': json_node_name})
+    if bundle_vars:
+        whole_bundle_dict = loads(bundle_vars.string)
+        return {
+            'name': whole_bundle_dict.get('bundleData', {}).get('basic_data', {}).get('human_name', ''),
+            'machine_name': whole_bundle_dict.get('bundleData', {}).get('machine_name', ''),
+            'tier_item_data': whole_bundle_dict.get('bundleData', {}).get('tier_item_data', {}),
+            'tier_order': whole_bundle_dict.get('bundleData', {}).get('tier_order', []),
+            'tier_display_data': whole_bundle_dict.get('bundleData', {}).get('tier_display_data', {})
+        }
+    else:
+        print('JSON info in {} not found.'.format(json_node_name))
+        return {}
 
 
 def get_bundle_dict(humble_url, is_file):
@@ -56,30 +49,12 @@ def get_bundle_dict(humble_url, is_file):
         with open(humble_url, "r") as content:
             bundle_dict = load(content)
     else:
-        session = Session()
-        current_page = session.get(humble_url)
-        if current_page.status_code != codes.ok:
-            print('Failed to get {}'.format(humble_url))
-            exit(-1)
-        soup = BeautifulSoup(current_page.text, features="html.parser")
+        soup = get_soup_from_page(humble_url)
         if not soup:
             print('Failed to get {}'.format(humble_url))
             return bundle_dict
         # tiers no longer present in HTML code
-        # title_tiers = order_humble_items(soup)
-        json_node_name = 'webpack-bundle-page-data'
-        bundle_vars = soup.find('script', {'id': json_node_name})
-        if bundle_vars:
-            whole_bundle_dict = loads(bundle_vars.string)
-            bundle_dict = {
-                'name': whole_bundle_dict.get('bundleData', {}).get('basic_data', {}).get('human_name', ''),
-                'machine_name': whole_bundle_dict.get('bundleData', {}).get('machine_name', ''),
-                'tier_item_data': whole_bundle_dict.get('bundleData', {}).get('tier_item_data', {}),
-                'tier_order': whole_bundle_dict.get('bundleData', {}).get('tier_order', []),
-                'tier_display_data': whole_bundle_dict.get('bundleData', {}).get('tier_display_data', {})
-            }
-        else:
-            print('JSON info in {} not found.'.format(json_node_name))
+        bundle_dict = extract_humble_dict_from_soup(soup)
     return bundle_dict
 
 
@@ -112,16 +87,17 @@ def item_in_bundle_dict_to_str(item, print_desc=False):
         desc=item['description'] if print_desc else '')
 
 
-def print_bundle_item(bundle_data=None, item=None):
+def print_bundle_item(bundle_data=None, item=None, index_str=''):
     if not item:
         return
-    print(item_in_bundle_dict_to_str(item))
+    print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
     books_found = search_libgen_by_title(item['name'])
     filtered_books = filter_search_results(item, books_found)
     print(filtered_books)
-    for md5 in filtered_books:
+    for idx, md5 in enumerate(filtered_books):
         if not run_parameters['libgen_mirrors']:
             run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
+        print('{}/{}'.format(idx+1, len(filtered_books)))
         get_file_from_url(run_parameters=run_parameters, bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
     print('------------------------------------------------')
 
@@ -152,15 +128,24 @@ def get_tiers(bundle_dict):
     return bundle_dict['tier_display_data']
 
 
+def save_bundle_json(bundle_dict):
+    path = get_output_path(run_parameters, bundle_dict['machine_name'])
+    path = os.path.join(path, bundle_dict['machine_name'] + '.json')
+    with open(path, 'w') as f:
+        f.write(json.dumps(bundle_dict))
+
+
 def print_bundle_dict(bundle_dict):
     tiers = get_tiers(bundle_dict)
     clean_upper_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
-        print('\n\n\n\nTIER ' + str(idx) + '\n\n')
-        for name in tier_components:
+        print('\n\n\n\nTIER {}/{}\n\n'.format(idx+1, len(bundle_dict['tier_order'])))
+        for tier_idx, name in enumerate(tier_components):
             item = bundle_dict['tier_item_data'].get(name, None)
-            print_bundle_item(bundle_data=bundle_dict, item=item)
+            print_bundle_item(bundle_data=bundle_dict, item=item,
+                              index_str='{}/{}'.format(tier_idx+1, len(tier_components)))
+    save_bundle_json(bundle_dict)
 
 
 def get_humble(humble_url, is_file=False):
@@ -175,30 +160,6 @@ def get_humble(humble_url, is_file=False):
     except Exception as e:
         print('Exception in get_humble: ' + str(e))
     return {}
-
-
-def parse_arguments():
-    argumentList = sys.argv[1:]
-    options = "hu:ao:l:"
-    long_options = ["help", "urls=", "archive",  "out=", "libgen="]
-    try:
-        arguments, values = getopt.getopt(argumentList, options, long_options)
-        for currentArgument, currentValue in arguments:
-            if currentArgument in ('-h', long_options[0]):
-                print("Displaying Help")
-            elif currentArgument in ('-u', long_options[1]):
-                url = currentValue
-                url_list = url.split(',')
-                run_parameters['bundles'] = url_list
-            elif currentArgument in ('-a', long_options[2]):
-                run_parameters['archive'] = True
-            elif currentArgument in ('-o', long_options[3]):
-                run_parameters['output_dir'] = currentValue
-            elif currentArgument in ('-l', long_options[4]):
-                run_parameters['libgen_base'] = currentValue
-    except getopt.error as err:
-        # output error, and return with an error code
-        print(str(err))
 
 
 def main():

@@ -6,8 +6,7 @@ import requests
 from tqdm import tqdm
 from bs4 import Tag
 from requests import codes
-
-from LibGen import base_url, get_soup_from_page
+from utils import generate_filename, get_soup_from_page
 
 
 def create_dir(path):
@@ -91,30 +90,11 @@ def get_filename_from_header(request, md5):
     return filename
 
 
-def generate_filename(path, filename, extension):
-    name = os.path.join(path, filename)
-    numbered_name = name
-    if os.path.exists(name):
-        name_without_ext = name[:name.rfind('.')]
-        idx = 0
-        while os.path.exists(numbered_name):
-            idx += 1
-            numbered_name = '{}_{}.{}'.format(name_without_ext, idx, extension)
-    return numbered_name
-
-
 def get_book(book_url, path, filename, extension, md5):
     if book_url:
         print('Requesting book from {}'.format(book_url))
-        skip = False
+        skip = True
         if not skip:
-            # file_req = requests.get(book_url, timeout=60 * 5)
-            # if not filename:
-            #     filename = get_filename_from_header(file_req, md5)
-            # if file_req.status_code == codes.ok:
-            #     full_filename = generate_filename(path, filename, extension)
-            #     with open(full_filename, 'wb') as f:
-            #         f.write(file_req.content)
             file_req = requests.get(book_url, book_url, timeout=60 * 5, stream=True)
             total_size = int(file_req.headers.get('content-length', 0))
             if not filename:
@@ -124,7 +104,6 @@ def get_book(book_url, path, filename, extension, md5):
                 chunk_size = 5*1024
                 with open(full_filename, 'wb') as f:
                     with tqdm(
-                                # file_req.iter_content(chunk_size),
                                 total=total_size,
                                 desc="Progress",
                                 unit='B',
@@ -132,8 +111,8 @@ def get_book(book_url, path, filename, extension, md5):
                                 unit_divisor=1024
                                       ) as progress:
                         for chunk in file_req.iter_content(chunk_size=chunk_size):
-                            datasize = f.write(chunk)
-                            progress.update(datasize)
+                            data_size = f.write(chunk)
+                            progress.update(data_size)
                 print('Book downloaded successfully from {} to {}'.format(book_url, os.path.join(path, filename)))
 
 
