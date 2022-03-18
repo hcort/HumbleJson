@@ -1,3 +1,13 @@
+import re
+
+
+def sanitize_word(x):
+    x = re.sub(r'\W+', '', x)
+    if x.isdigit():
+        return ''
+    return x
+
+
 def filter_search_results(humble_dict, libgen_dict):
     """
 
@@ -11,6 +21,8 @@ def filter_search_results(humble_dict, libgen_dict):
     """
     humble_author_words = list(filter(lambda x: len(x) > 2, humble_dict['author'].lower().split()))
     humble_title_words = list(filter(lambda x: len(x) > 2, humble_dict['name'].lower().split()))
+    humble_author_words = list(map(sanitize_word, humble_author_words))
+    humble_title_words = list(map(sanitize_word, humble_title_words))
     filtered_dict = {}
     for libgen_item in libgen_dict:
         if libgen_dict[libgen_item]['extension'] and libgen_dict[libgen_item]['extension'] in ('epub', 'mobi', 'pdf'):
