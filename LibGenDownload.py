@@ -70,11 +70,14 @@ def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
     # we need md5 and key parameters to generate a valid URL
     download_page_url = '{}://{}/ads.php?md5={}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], md5)
     soup = get_soup_from_page(download_page_url)
-    get_link = soup.select('#main td:nth-of-type(2) a')
-    if get_link:
-        download_link = '{}://{}/{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], get_link[0]['href'])
-        # this link doesn't have a filename
-        get_book(download_link, path, filename='', extension=book['extension'], md5=md5)
+    if soup:
+        get_link = soup.select('#main td:nth-of-type(2) a')
+        if get_link:
+            download_link = '{}://{}/{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], get_link[0]['href'])
+            # this link doesn't have a filename
+            get_book(download_link, path, filename='', extension=book['extension'], md5=md5)
+    else:
+        print(f'Unable to get {download_page_url}')
 
 
 def get_filename_from_header(request, md5):
