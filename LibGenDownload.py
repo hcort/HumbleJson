@@ -93,27 +93,25 @@ def get_filename_from_header(request, md5):
 def get_book(book_url, path, filename, extension, md5):
     if book_url:
         print('Requesting book from {}'.format(book_url))
-        skip = True
-        if not skip:
-            file_req = requests.get(book_url, book_url, timeout=60 * 5, stream=True)
-            total_size = int(file_req.headers.get('content-length', 0))
-            if not filename:
-                filename = get_filename_from_header(file_req, md5)
-            if file_req.status_code == codes.ok:
-                full_filename = generate_filename(path, filename, extension)
-                chunk_size = 5*1024
-                with open(full_filename, 'wb') as f:
-                    with tqdm(
-                                total=total_size,
-                                desc="Progress",
-                                unit='B',
-                                unit_scale=True,
-                                unit_divisor=1024
-                                      ) as progress:
-                        for chunk in file_req.iter_content(chunk_size=chunk_size):
-                            data_size = f.write(chunk)
-                            progress.update(data_size)
-                print('Book downloaded successfully from {} to {}'.format(book_url, os.path.join(path, filename)))
+        file_req = requests.get(book_url, book_url, timeout=60 * 5, stream=True)
+        total_size = int(file_req.headers.get('content-length', 0))
+        if not filename:
+            filename = get_filename_from_header(file_req, md5)
+        if file_req.status_code == codes.ok:
+            full_filename = generate_filename(path, filename, extension)
+            chunk_size = 5*1024
+            with open(full_filename, 'wb') as f:
+                with tqdm(
+                            total=total_size,
+                            desc="Progress",
+                            unit='B',
+                            unit_scale=True,
+                            unit_divisor=1024
+                                  ) as progress:
+                    for chunk in file_req.iter_content(chunk_size=chunk_size):
+                        data_size = f.write(chunk)
+                        progress.update(data_size)
+            print('Book downloaded successfully from {} to {}'.format(book_url, os.path.join(path, filename)))
 
 
 def get_file_from_url(run_parameters, bundle_data, book, md5):
