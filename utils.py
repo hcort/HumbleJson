@@ -37,6 +37,16 @@ def get_soup_from_page(current_url):
     return soup
 
 
+def display_help():
+    print('Humble Bundle Json Extracter\n'
+          '\tParamenters: -h | -u "urls to parse" | -a | -o "output_dir" | -l "url to libgen"\n'
+          '\tLong parameters: help | urls="" | archive | out="" | libgen=""\n'
+          '-u Input URLs. It can be a single URL or a list of comma separated URLs\n'
+          '-a Flag to archive the Humble Bundle page into the Wayback Machine\n'
+          '-o Output dir for the files from Library Genesis\n'
+          '-l Base URL for the Libgen mirror\t')
+
+
 def parse_arguments():
     argument_list = sys.argv[1:]
     options = "hu:ao:l:"
@@ -45,7 +55,7 @@ def parse_arguments():
         arguments, values = getopt.getopt(argument_list, options, long_options)
         for current_argument, current_value in arguments:
             if current_argument in ('-h', long_options[0]):
-                print("Displaying Help")
+                display_help()
             elif current_argument in ('-u', long_options[1]):
                 url = current_value
                 url_list = url.split(',')
