@@ -1,11 +1,10 @@
 import getopt
 import os
 import sys
+from datetime import datetime
 
-import requests
-from bs4 import BeautifulSoup
-
-base_url = "http://libgen.rs/"
+# base_url = "http://libgen.rs/"
+base_url = "https://libgen.is/"
 
 run_parameters = {
     'bundles': [],
@@ -14,6 +13,35 @@ run_parameters = {
     'output_dir': '',
     'archive': False
 }
+
+
+def delete_all_files(folder):
+    for item in os.listdir(folder):
+        os.remove(os.path.join(folder, item))
+
+
+def wait_for_file_download_complete(folder):
+    download_complete = False
+    last_size = -1
+    init_time = datetime.datetime.now()
+    file_exists_retries = 10
+    size_change_retries = 10
+    while not download_complete:
+        from time import sleep
+        sleep(3)
+        files = os.listdir(folder)
+        if files:
+            current_size = os.path.getsize(os.path.join(folder, files[0]))
+            download_complete = not (files[0].endswith('opdownload')) and (last_size == current_size)
+            last_size = current_size
+            if last_size == current_size:
+                size_change_retries -= 1
+        else:
+            file_exists_retries -= 1
+        if not download_complete and ((size_change_retries == 0) or (file_exists_retries == 0)):
+            current_time = datetime.datetime.now()
+            if (current_time - init_time).seconds > (60 * 30):
+                raise TimeoutError('Max number of retries downloading')
 
 
 def generate_filename(path, filename, extension):
@@ -26,15 +54,6 @@ def generate_filename(path, filename, extension):
             idx += 1
             numbered_name = '{}_{}.{}'.format(name_without_ext, idx, extension)
     return numbered_name
-
-
-def get_soup_from_page(current_url):
-    req = requests.get(current_url)
-    if req.status_code != requests.codes.ok:
-        return None
-    response = req.content
-    soup = BeautifulSoup(response, 'html.parser', from_encoding='utf-8')
-    return soup
 
 
 def display_help():

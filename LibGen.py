@@ -3,7 +3,8 @@ from functools import reduce
 from urllib.parse import quote
 from bs4 import Tag
 
-from utils import get_soup_from_page, run_parameters
+from Connections import get_soup_from_page
+from utils import run_parameters
 
 titles_location_detailed_view = 'td:nth-child(3) b a'
 authors_location_detailed_view = 'tr:nth-child(3) td+ td'

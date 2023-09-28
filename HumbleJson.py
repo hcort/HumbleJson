@@ -12,11 +12,12 @@ import os
 from waybackpy import Url
 
 import json
+from Connections import get_soup_from_page
 from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
 from LibGenDownload import get_mirror_list, get_file_from_url, get_output_path
 from json import load, loads
-from utils import get_soup_from_page, parse_arguments, run_parameters
+from utils import parse_arguments, run_parameters
 
 
 def generate_author_publisher_string(list_of_names, key1, key2):
@@ -49,7 +50,7 @@ def get_bundle_dict(humble_url, is_file):
         with open(humble_url, "r") as content:
             bundle_dict = load(content)
     else:
-        soup = get_soup_from_page(humble_url)
+        soup = get_soup_from_page(humble_url, use_opera_vpn=False)
         if not soup:
             print('Failed to get {}'.format(humble_url))
             return bundle_dict
@@ -116,7 +117,7 @@ def clean_upper_tiers(bundle_dict):
 
 def get_tiers(bundle_dict):
     # if the bundle is not tiered i create a fake tier with all the elements in the bundle
-    if not bundle_dict['tier_display_data']:
+    if not bundle_dict.get('tier_display_data', None):
         bundle_dict['tier_order'] = ['all']
         bundle_dict['tier_display_data'] = {
             'all': {

@@ -1,12 +1,9 @@
 import os
 import urllib
 from urllib.parse import urlparse
-
-import requests
-from tqdm import tqdm
 from bs4 import Tag
-from requests import codes
-from utils import generate_filename, get_soup_from_page
+
+from Connections import get_soup_from_page, get_book_requests, get_book_selenium, selenium_driver
 
 
 def create_dir(path):
@@ -62,59 +59,41 @@ def get_download_link_from_library_lol(run_parameters, book_url, md5, path):
     if get_link:
         download_link = get_link[0].get('href', '')
         filename = urllib.parse.unquote(book_url[book_url.rfind('/') + 1:])
-        get_book(download_link, path, filename)
+        get_book_requests(download_link, path, filename)
 
 
 def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
+    """
+        Every libgen mirror has minor differences.
+
+        In libgen_rocks, libgen.is, etc, the css path to the download link is "#main td:nth-of-type(2) a"
+
+        The file name of the book is in the GET url, so we can take it from there
+
+    :param run_parameters:
+    :param book:
+    :param md5:
+    :param path:
+    :return:
+    """
     url_parts = urlparse(book['url'])
     # we need md5 and key parameters to generate a valid URL
     download_page_url = '{}://{}/ads.php?md5={}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], md5)
     soup = get_soup_from_page(download_page_url)
     if soup:
-        get_link = soup.select('#main td:nth-of-type(2) a')
-        if get_link:
-            download_link = '{}://{}/{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], get_link[0]['href'])
-            # this link doesn't have a filename
-            get_book(download_link, path, filename='', extension=book['extension'], md5=md5)
+        css_path = '#main td:nth-of-type(2) a'
+        if selenium_driver.use_opera_vpn:
+            get_book_selenium(css_path=css_path, book_url='', path=path,
+                              filename='', extension=book['extension'], md5=md5)
+        else:
+            get_link = soup.select(css_path)
+            if get_link:
+                download_link = '{}://{}/{}'.format(url_parts.scheme,
+                                                    run_parameters['libgen_mirrors'][1], get_link[0]['href'])
+                # this link doesn't have a filename
+                get_book_requests(download_link, path, filename='', extension=book['extension'], md5=md5)
     else:
         print(f'Unable to get {download_page_url}')
-
-
-def get_filename_from_header(request, md5):
-    # this works in the library_lol mirror
-    header = request.headers.get('Content-Disposition', '')
-    if header:
-        if header[22] == ' ':
-            filename = header[23:-1]
-        else:
-            filename = header[22:-1]
-    else:
-        filename = md5
-    return filename
-
-
-def get_book(book_url, path, filename, extension, md5):
-    if book_url:
-        print('Requesting book from {}'.format(book_url))
-        file_req = requests.get(book_url, book_url, timeout=60 * 5, stream=True)
-        total_size = int(file_req.headers.get('content-length', 0))
-        if not filename:
-            filename = get_filename_from_header(file_req, md5)
-        if file_req.status_code == codes.ok:
-            full_filename = generate_filename(path, filename, extension)
-            chunk_size = 5*1024
-            with open(full_filename, 'wb') as f:
-                with tqdm(
-                            total=total_size,
-                            desc="Progress",
-                            unit='B',
-                            unit_scale=True,
-                            unit_divisor=1024
-                                  ) as progress:
-                    for chunk in file_req.iter_content(chunk_size=chunk_size):
-                        data_size = f.write(chunk)
-                        progress.update(data_size)
-            print('Book downloaded successfully from {} to {}'.format(book_url, os.path.join(path, filename)))
 
 
 def get_file_from_url(run_parameters, bundle_data, book, md5):
