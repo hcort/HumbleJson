@@ -1,13 +1,11 @@
 import datetime
-from urllib.parse import urlparse, unquote
-
-import json
 import os
 
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from slugify import slugify
 from tqdm import tqdm
 from requests import codes
 
@@ -152,9 +150,15 @@ def get_book_selenium(css_path, book_url, path, filename, extension, md5):
         # TODO control for Bad Gateway info
         wait_for_file_download_complete(selenium_driver.download_folder)
         download_filename = os.listdir(selenium_driver.download_folder)[0]
-        os.replace(
+        filename, file_extension = os.path.splitext(download_filename)
+        valid_filename = f'{slugify(filename, max_length=100)}.{file_extension}'
+        os.rename(
             os.path.join(selenium_driver.download_folder, download_filename),
-            os.path.join(path, download_filename)
+            os.path.join(selenium_driver.download_folder, valid_filename)
+        )
+        os.replace(
+            os.path.join(selenium_driver.download_folder, valid_filename),
+            os.path.join(path, valid_filename)
         )
         return True
     except Exception as ex:
