@@ -83,7 +83,7 @@ def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
     if soup:
         css_path = '#main td:nth-of-type(2) a'
         if selenium_driver.use_opera_vpn:
-            get_book_selenium(css_path=css_path, book_url='', path=path,
+            return get_book_selenium(css_path=css_path, book_url='', path=path,
                               filename='', extension=book['extension'], md5=md5)
         else:
             get_link = soup.select(css_path)
@@ -91,9 +91,10 @@ def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
                 download_link = '{}://{}/{}'.format(url_parts.scheme,
                                                     run_parameters['libgen_mirrors'][1], get_link[0]['href'])
                 # this link doesn't have a filename
-                get_book_requests(download_link, path, filename='', extension=book['extension'], md5=md5)
+                return get_book_requests(download_link, path, filename='', extension=book['extension'], md5=md5)
     else:
         print(f'Unable to get {download_page_url}')
+    return False
 
 
 def get_file_from_url(run_parameters, bundle_data, book, md5):
@@ -101,4 +102,4 @@ def get_file_from_url(run_parameters, bundle_data, book, md5):
             (not bundle_data) or (not book['url']) or (not md5):
         return
     path = get_output_path(run_parameters=run_parameters, bundle_name=bundle_data.get('machine_name', ''))
-    get_download_link_from_libgen_rocks(run_parameters=run_parameters, book=book, md5=md5, path=path)
+    return get_download_link_from_libgen_rocks(run_parameters=run_parameters, book=book, md5=md5, path=path)

@@ -17,7 +17,7 @@ from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
 from LibGenDownload import get_mirror_list, get_file_from_url, get_output_path
 from json import load, loads
-from utils import parse_arguments, run_parameters
+from utils import parse_arguments, run_parameters, get_backup_file, save_to_backup_file, save_bundle_json
 
 
 def generate_author_publisher_string(list_of_names, key1, key2):
@@ -44,18 +44,25 @@ def extract_humble_dict_from_soup(soup):
 
 
 def get_bundle_dict(humble_url, is_file):
-    bundle_dict = {}
     if is_file:
         # leo el JSON desde un fichero
         with open(humble_url, "r") as content:
-            bundle_dict = load(content)
+            return load(content)
     else:
-        soup = get_soup_from_page(humble_url, use_opera_vpn=False)
-        if not soup:
-            print('Failed to get {}'.format(humble_url))
-            return bundle_dict
-        # tiers no longer present in HTML code
-        bundle_dict = extract_humble_dict_from_soup(soup)
+        backup_file = get_backup_file(humble_url)
+        if not os.path.isfile(backup_file):
+            soup = get_soup_from_page(humble_url, use_opera_vpn=False)
+            if not soup:
+                print('Failed to get {}'.format(humble_url))
+                return {}
+            # tiers no longer present in HTML code
+            bundle_dict = extract_humble_dict_from_soup(soup)
+            bundle_dict['url'] = humble_url
+            bundle_dict['from_backup'] = True
+            save_to_backup_file(backup_file, bundle_dict)
+        else:
+            with open(backup_file, 'r') as content:
+                return load(content)
     return bundle_dict
 
 
@@ -91,15 +98,32 @@ def item_in_bundle_dict_to_str(item, print_desc=False):
 def print_bundle_item(bundle_data=None, item=None, index_str=''):
     if not item:
         return
+    if item.get('downloaded', False):
+        return
     print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
-    books_found = search_libgen_by_title(item['name'])
-    filtered_books = filter_search_results(item, books_found)
-    print(filtered_books)
-    for idx, md5 in enumerate(filtered_books):
-        if not run_parameters['libgen_mirrors']:
-            run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
-        print('{}/{}'.format(idx+1, len(filtered_books)))
-        get_file_from_url(run_parameters=run_parameters, bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
+    try:
+        if not item.get('books_found', {}):
+            books_found = search_libgen_by_title(item['name'])
+            filtered_books = filter_search_results(item, books_found)
+            item['books_found'] = dict(filtered_books)
+            save_bundle_json(bundle_data)
+        else:
+            filtered_books = dict(item['books_found'])
+        print(filtered_books)
+        for idx, md5 in enumerate(filtered_books):
+            if not run_parameters['libgen_mirrors']:
+                run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
+            print('{}/{}'.format(idx + 1, len(filtered_books)))
+            book_downloaded = get_file_from_url(run_parameters=run_parameters,
+                                                   bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
+            if book_downloaded:
+                item['books_found'].pop(md5)
+                save_bundle_json(bundle_data)
+        if not item.get('books_found', {}):
+            item['downloaded'] = True
+    except Exception as err:
+        print(f'Error downloading {item["name"]} - {err}')
+    save_bundle_json(bundle_data)
     print('------------------------------------------------')
 
 
@@ -129,23 +153,16 @@ def get_tiers(bundle_dict):
     return bundle_dict['tier_display_data']
 
 
-def save_bundle_json(bundle_dict):
-    path = get_output_path(run_parameters, bundle_dict['machine_name'])
-    path = os.path.join(path, bundle_dict['machine_name'] + '.json')
-    with open(path, 'w') as f:
-        f.write(json.dumps(bundle_dict))
-
-
 def print_bundle_dict(bundle_dict):
     tiers = get_tiers(bundle_dict)
     clean_upper_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
-        print('\n\n\n\nTIER {}/{}\n\n'.format(idx+1, len(bundle_dict['tier_order'])))
+        print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
         for tier_idx, name in enumerate(tier_components):
             item = bundle_dict['tier_item_data'].get(name, None)
             print_bundle_item(bundle_data=bundle_dict, item=item,
-                              index_str='{}/{}'.format(tier_idx+1, len(tier_components)))
+                              index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
     save_bundle_json(bundle_dict)
 
 
@@ -153,14 +170,17 @@ def get_humble(humble_url, is_file=False):
     url = True
     title_tiers = None
     bundle_dict = get_bundle_dict(humble_url, is_file)
-    try:
-        print(bundle_dict['name'] + '\t(' + humble_url + ')')
-        items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
-        bundle_dict['tier_item_data'] = items_dict
+    if not bundle_dict.get('from_backup', False):
+        try:
+            print(bundle_dict['name'] + '\t(' + humble_url + ')')
+            items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
+            bundle_dict['tier_item_data'] = items_dict
+            return bundle_dict
+        except Exception as e:
+            print('Exception in get_humble: ' + str(e))
+        return {}
+    else:
         return bundle_dict
-    except Exception as e:
-        print('Exception in get_humble: ' + str(e))
-    return {}
 
 
 def main():

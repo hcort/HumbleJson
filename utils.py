@@ -1,7 +1,8 @@
 import getopt
+import json
 import os
 import sys
-from datetime import datetime
+import datetime
 
 # base_url = "http://libgen.rs/"
 base_url = "https://libgen.is/"
@@ -55,6 +56,25 @@ def generate_filename(path, filename, extension):
             idx += 1
             numbered_name = '{}_{}.{}'.format(name_without_ext, idx, extension)
     return numbered_name
+
+
+def get_backup_file(humble_url):
+    url_path = humble_url.split('/')[-1]
+    return os.path.join(run_parameters['output_dir'], url_path)
+
+
+def save_to_backup_file(backup_file, bundle_dict):
+    with open(backup_file, 'w') as file:
+        json.dump(bundle_dict, file)
+
+
+def save_bundle_json(bundle_dict):
+    # path = get_output_path(run_parameters, bundle_dict['machine_name'])
+    # path = os.path.join(path, bundle_dict['machine_name'] + '.json')
+    # with open(path, 'w') as f:
+    #     f.write(json.dumps(bundle_dict))
+    backup_file = get_backup_file(bundle_dict['url'])
+    save_to_backup_file(backup_file, bundle_dict)
 
 
 def display_help():
