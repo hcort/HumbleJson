@@ -36,12 +36,13 @@ def wait_for_file_download_complete(folder):
             last_size = current_size
             if last_size == current_size:
                 size_change_retries -= 1
+            else:
+                size_change_retries = 200
+            last_size = current_size
         else:
             file_exists_retries -= 1
-        if not download_complete and ((size_change_retries == 0) or (file_exists_retries == 0)):
-            current_time = datetime.datetime.now()
-            if (current_time - init_time).seconds > (60 * 30):
-                raise TimeoutError('Max number of retries downloading')
+        if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
+            raise TimeoutError('Max number of retries downloading')
 
 
 def generate_filename(path, filename, extension):
