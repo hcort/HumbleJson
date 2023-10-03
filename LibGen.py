@@ -169,9 +169,7 @@ def search_libgen(url, is_fiction=False):
     page_number = 1
     url_with_page = url + "&page=" + str(page_number)
     soup = get_soup_from_page(url_with_page)
-    if not soup:
-        print('Unable to connecto to LibGen {}'.format(url_with_page))
-        return all_books
+    # if soup is not valid it means get_soup has raised an exception that will be handled on an upper level
     num_items = get_found_items(soup, is_fiction)
     all_books.update(get_fiction_results(soup, is_fiction=is_fiction))
     if num_items != '0':
@@ -200,6 +198,9 @@ def search_libgen_by_title(title):
     # language=English
     # format=mobi, format=epub
     urlencoded_query = quote(title.encode('utf-8'))
-    search_url = run_parameters['libgen_base'] + "/search.php?&req=" + urlencoded_query + "&res=" + \
-                 str(items_per_page) + '&column=' + query + "&phrase=1&view=detailed"
+    # search_url = run_parameters['libgen_base'] + run_parameters['libgen_search_path'] +
+    # ?&req=" + urlencoded_query + "&res=" + \
+    #              str(items_per_page) + '&column=' + query + "&phrase=1&view=detailed"
+    search_url = f'{run_parameters["libgen_base"]}{run_parameters["libgen_search_path"]}?&req={urlencoded_query}&' \
+                 f'res={items_per_page}&column={query}&phrase=1&view=detailed'
     return search_libgen(search_url)

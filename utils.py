@@ -5,11 +5,19 @@ import sys
 import datetime
 
 # base_url = "http://libgen.rs/"
-base_url = "https://libgen.is/"
+libgen_search = {
+    'base_url': "https://libgen.is/",
+    'search_path': "search.php"
+}
+# libgen_search = {
+#     'base_url': "https://libgen.li/",
+#     'search_path': "index.php"
+# }
 
 run_parameters = {
     'bundles': [],
-    'libgen_base': base_url,
+    'libgen_base': libgen_search['base_url'],
+    'libgen_search_path': libgen_search['search_path'],
     'libgen_mirrors': [],
     'output_dir': '',
     'archive': False
@@ -26,7 +34,7 @@ def wait_for_file_download_complete(folder):
     last_size = -1
     init_time = datetime.datetime.now()
     file_exists_retries = 10
-    size_change_retries = 10
+    size_change_retries = 200
     while not download_complete:
         from time import sleep
         sleep(3)
@@ -34,7 +42,6 @@ def wait_for_file_download_complete(folder):
         if files:
             current_size = os.path.getsize(os.path.join(folder, files[0]))
             download_complete = not (files[0].endswith('opdownload')) and (last_size == current_size)
-            last_size = current_size
             if last_size == current_size:
                 size_change_retries -= 1
             else:

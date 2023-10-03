@@ -9,6 +9,7 @@ from slugify import slugify
 from tqdm import tqdm
 from requests import codes
 
+import json
 from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete
 
 OPERA_PREFS = "C:\\Users\\Héctor\\Desktop\\compartido_msedge\\PyCharmProjects\\HumbleJson\\opera_prefs\\"
@@ -74,26 +75,19 @@ def get_soup_from_page(current_url, use_opera_vpn=True):
 
 def get_soup_from_page_requests(current_url):
     soup = None
-    try:
-        req = requests.get(current_url)
-        if req.status_code != requests.codes.ok:
-            return None
-        response = req.content
-        soup = BeautifulSoup(response, 'html.parser', from_encoding='utf-8')
-    except requests.exceptions.ConnectionError as err:
-        print(f'Can\'t connect to {current_url} - {str(err)}')
-    except Exception as err:
-        print(f'Can\'t connect to {current_url} - {str(err)}')
+    req = requests.get(current_url)
+    if req.status_code != requests.codes.ok:
+        return None
+    response = req.content
+    soup = BeautifulSoup(response, 'html.parser', from_encoding='utf-8')
     return soup
 
 
 def get_soup_from_page_selenium(current_url):
     soup = None
-    try:
-        selenium_driver.driver.get(current_url)
-        soup = BeautifulSoup(selenium_driver.driver.page_source, 'html.parser', from_encoding='utf-8')
-    except Exception as err:
-        print(f'Can\'t connect to {current_url} - {str(err)}')
+    selenium_driver.driver.set_page_load_timeout(30)
+    selenium_driver.driver.get(current_url)
+    soup = BeautifulSoup(selenium_driver.driver.page_source, 'html.parser', from_encoding='utf-8')
     return soup
 
 
