@@ -1,4 +1,7 @@
 import datetime
+import shutil
+
+import json
 import os
 
 import requests
@@ -9,8 +12,9 @@ from slugify import slugify
 from tqdm import tqdm
 from requests import codes
 
-import json
-from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete
+
+from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete, \
+    save_to_backup_file
 
 OPERA_PREFS = "C:\\Users\\Héctor\\Desktop\\compartido_msedge\\PyCharmProjects\\HumbleJson\\opera_prefs\\"
 
@@ -33,6 +37,11 @@ class OperaDriver:
         self.__driver = None
         self.__download_folder = None
         self.__use_opera_vpn = False
+
+    def __del__(self):
+        if self.__driver:
+            self.__driver.close()
+        shutil.rmtree(self.__download_folder)
 
     @property
     def download_folder(self):
@@ -59,8 +68,7 @@ class OperaDriver:
         with open(os.path.join(OPERA_PREFS, 'Preferences_custom.txt'), 'r') as file:
             prefs_dict = json.load(file)
             prefs_dict['download']['default_directory'] = self.__download_folder
-            with open(os.path.join(OPERA_PREFS, 'Preferences'), 'w') as output_file:
-                json.dump(prefs_dict, output_file)
+            save_to_backup_file(os.path.join(OPERA_PREFS, 'Preferences'), prefs_dict)
 
 
 selenium_driver = OperaDriver()

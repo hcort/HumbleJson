@@ -24,6 +24,9 @@ items_found_selector_fiction = ".catalog_paginator div:first-child"
 goto_fiction_selector = "body table:nth-of-type(2) td:nth-child(3) font a"
 last_page_selector = '#paginator_example_top td span a'
 
+fiction_page_selector = '.catalog_paginator .page_selector'
+non_fiction_page_selector = 'body script:nth-of-type(1)'
+
 
 def append_author_string(x, y):
     authors_str = x if type(x) is str else ''
@@ -48,23 +51,15 @@ def parse_extension_fiction(text):
     return ''
 
 
-def expand_tuple_into_dict(title, author, extension, publisher=None, is_fiction=True):
-    if is_fiction:
-        return {
-            'title': title.text,
-            'author': reduce(append_author_string, author.contents),
-            'publisher': '',
-            'extension': parse_extension_fiction(extension.text),
-            'url': build_url(run_parameters['libgen_base'], title.get('href'))
-        }
-    else:
-        return {
-            'title': title.text,
-            'author': author.text,
-            'publisher': publisher.text if publisher else '',
-            'extension': extension.text.lower(),
-            'url': title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
-        }
+def expand_tuple_into_dict(title, author, extension, publisher='', is_fiction=True):
+    return {
+        'title': title.text,
+        'author': reduce(append_author_string, author.contents) if is_fiction else author.text,
+        'publisher': publisher.text if publisher else '',
+        'extension': parse_extension_fiction(extension.text) if is_fiction else extension.text.lower(),
+        'url': build_url(run_parameters['libgen_base'], title.get('href')) if is_fiction
+        else title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
+    }
 
 
 def zip_tuple_to_dict(iterable, is_fiction=True):
@@ -94,10 +89,7 @@ def get_page_count(soup, start_url, is_fiction=False):
     """
     pending_pages = []
     page_number = 0
-    if is_fiction:
-        last_page_link = soup.select('.catalog_paginator .page_selector')
-    else:
-        last_page_link = soup.select('body script:nth-of-type(1)')
+    last_page_link = soup.select(fiction_page_selector) if is_fiction else soup.select(non_fiction_page_selector)
     if not last_page_link:
         return pending_pages
     if is_fiction:
@@ -114,10 +106,7 @@ def get_page_count(soup, start_url, is_fiction=False):
 
 
 def get_found_items(soup, is_fiction=False):
-    if is_fiction:
-        items_found = soup.select_one(items_found_selector_fiction)
-    else:
-        items_found = soup.select_one(items_found_selector)
+    items_found = soup.select_one(items_found_selector_fiction) if is_fiction else soup.select_one(items_found_selector)
     if not items_found:
         return 0
     num_items = re.search('([0-9]+) files found', items_found.text)
@@ -130,10 +119,7 @@ def extract_md5_from_title(title, is_fiction=False):
     title_url = title.get('href', '')
     if not title_url:
         return ''
-    if is_fiction:
-        md5 = re.search('/fiction/([0-9A-F]+)', title_url)
-    else:
-        md5 = re.search('md5=([0-9A-F]+)', title_url)
+    md5 = re.search('/fiction/([0-9A-F]+)', title_url) if is_fiction else re.search('md5=([0-9A-F]+)', title_url)
     if not md5:
         return ''
     return md5.group(1)
