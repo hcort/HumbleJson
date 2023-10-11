@@ -103,28 +103,28 @@ def print_bundle_item(bundle_data=None, item=None, index_str=''):
     if item.get('downloaded', False):
         return
     print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
-    # try:
-    if not item.get('books_found', {}):
-        books_found = search_libgen_by_title(item['name'])
-        filtered_books = filter_search_results(item, books_found)
-        item['books_found'] = dict(filtered_books)
-        save_bundle_json(bundle_data)
-    else:
-        filtered_books = dict(item['books_found'])
-    print(filtered_books)
-    for idx, md5 in enumerate(filtered_books):
-        if not run_parameters['libgen_mirrors']:
-            run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
-        print('{}/{}'.format(idx + 1, len(filtered_books)))
-        book_downloaded = get_file_from_url(run_parameters=run_parameters,
-                                               bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
-        if book_downloaded:
-            item['books_found'].pop(md5)
+    try:
+        if not item.get('books_found', {}):
+            books_found = search_libgen_by_title(item['name'])
+            filtered_books = filter_search_results(item, books_found)
+            item['books_found'] = dict(filtered_books)
             save_bundle_json(bundle_data)
-    if not item.get('books_found', {}):
-        item['downloaded'] = True
-    # except Exception as err:
-    #     print(f'Error downloading {item["name"]} - {err}')
+        else:
+            filtered_books = dict(item['books_found'])
+        print(filtered_books)
+        for idx, md5 in enumerate(filtered_books):
+            if not run_parameters['libgen_mirrors']:
+                run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
+            print('{}/{}'.format(idx + 1, len(filtered_books)))
+            book_downloaded = get_file_from_url(run_parameters=run_parameters,
+                                                   bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
+            if book_downloaded:
+                item['books_found'].pop(md5)
+                save_bundle_json(bundle_data)
+        if not item.get('books_found', {}):
+            item['downloaded'] = True
+    except Exception as err:
+        print(f'Error downloading {item["name"]} - {err}')
     save_bundle_json(bundle_data)
     print('------------------------------------------------')
 
