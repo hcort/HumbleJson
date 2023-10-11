@@ -16,6 +16,7 @@ libgen_search = {
 
 run_parameters = {
     'bundles': [],
+    'files': [],
     'libgen_base': libgen_search['base_url'],
     'libgen_search_path': libgen_search['search_path'],
     'libgen_mirrors': [],
@@ -97,16 +98,16 @@ def display_help():
 def parse_arguments():
     argument_list = sys.argv[1:]
     options = "hu:ao:l:"
-    long_options = ["help", "urls=", "archive",  "out=", "libgen="]
+    long_options = ["help", "urls=", "archive",  "out=", "libgen=", "file="]
     try:
         arguments, values = getopt.getopt(argument_list, options, long_options)
         for current_argument, current_value in arguments:
             if current_argument in ('-h', long_options[0]):
                 display_help()
             elif current_argument in ('-u', long_options[1]):
-                url = current_value
-                url_list = url.split(',')
-                run_parameters['bundles'] = url_list
+                run_parameters['bundles'] = current_value.split(',')
+            elif current_argument in ('-f', long_options[5]):
+                run_parameters['files'] = current_value.split(',')
             elif current_argument in ('-a', long_options[2]):
                 run_parameters['archive'] = True
             elif current_argument in ('-o', long_options[3]):

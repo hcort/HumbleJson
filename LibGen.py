@@ -126,19 +126,11 @@ def extract_md5_from_title(title, is_fiction=False):
 
 
 def create_zipped_list(soup, is_fiction):
-    if is_fiction:
-        title_list = soup.select(titles_location_fiction)
-        author_list = soup.select(authors_location_fiction)
-        extension_list = soup.select(extension_location_fiction)
-        # no publishers or ids
-        zipped = zip(title_list, author_list, extension_list)
-    else:
-        title_list = soup.select(titles_location_detailed_view)
-        author_list = soup.select(authors_location_detailed_view)
-        publisher_list = soup.select(publisher_location_detailed_view)
-        extension_list = soup.select(extension_location_detailed_view)
-        zipped = zip(title_list, author_list, extension_list, publisher_list)
-    return zipped
+    title_list = soup.select(titles_location_fiction if is_fiction else titles_location_detailed_view)
+    author_list = soup.select(authors_location_fiction if is_fiction else authors_location_detailed_view)
+    extension_list = soup.select(extension_location_fiction if is_fiction else extension_location_detailed_view)
+    publisher_list = [''] * len(title_list) if is_fiction else soup.select(publisher_location_detailed_view)
+    return zip(title_list, author_list, extension_list, publisher_list)
 
 
 def get_fiction_results(soup, is_fiction):

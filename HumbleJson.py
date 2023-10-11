@@ -57,6 +57,8 @@ def get_bundle_dict(humble_url, is_file):
                 return {}
             # tiers no longer present in HTML code
             bundle_dict = extract_humble_dict_from_soup(soup)
+            items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
+            bundle_dict['tier_item_data'] = items_dict
             bundle_dict['url'] = humble_url
             bundle_dict['from_backup'] = True
             save_to_backup_file(backup_file, bundle_dict)
@@ -101,28 +103,28 @@ def print_bundle_item(bundle_data=None, item=None, index_str=''):
     if item.get('downloaded', False):
         return
     print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
-    try:
-        if not item.get('books_found', {}):
-            books_found = search_libgen_by_title(item['name'])
-            filtered_books = filter_search_results(item, books_found)
-            item['books_found'] = dict(filtered_books)
+    # try:
+    if not item.get('books_found', {}):
+        books_found = search_libgen_by_title(item['name'])
+        filtered_books = filter_search_results(item, books_found)
+        item['books_found'] = dict(filtered_books)
+        save_bundle_json(bundle_data)
+    else:
+        filtered_books = dict(item['books_found'])
+    print(filtered_books)
+    for idx, md5 in enumerate(filtered_books):
+        if not run_parameters['libgen_mirrors']:
+            run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
+        print('{}/{}'.format(idx + 1, len(filtered_books)))
+        book_downloaded = get_file_from_url(run_parameters=run_parameters,
+                                               bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
+        if book_downloaded:
+            item['books_found'].pop(md5)
             save_bundle_json(bundle_data)
-        else:
-            filtered_books = dict(item['books_found'])
-        print(filtered_books)
-        for idx, md5 in enumerate(filtered_books):
-            if not run_parameters['libgen_mirrors']:
-                run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
-            print('{}/{}'.format(idx + 1, len(filtered_books)))
-            book_downloaded = get_file_from_url(run_parameters=run_parameters,
-                                                   bundle_data=bundle_data, book=filtered_books[md5], md5=md5)
-            if book_downloaded:
-                item['books_found'].pop(md5)
-                save_bundle_json(bundle_data)
-        if not item.get('books_found', {}):
-            item['downloaded'] = True
-    except Exception as err:
-        print(f'Error downloading {item["name"]} - {err}')
+    if not item.get('books_found', {}):
+        item['downloaded'] = True
+    # except Exception as err:
+    #     print(f'Error downloading {item["name"]} - {err}')
     save_bundle_json(bundle_data)
     print('------------------------------------------------')
 
@@ -154,6 +156,7 @@ def get_tiers(bundle_dict):
 
 
 def print_bundle_dict(bundle_dict):
+    print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
     tiers = get_tiers(bundle_dict)
     clean_upper_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
@@ -167,38 +170,32 @@ def print_bundle_dict(bundle_dict):
 
 
 def get_humble(humble_url, is_file=False):
-    url = True
-    title_tiers = None
     bundle_dict = get_bundle_dict(humble_url, is_file)
-    if not bundle_dict.get('from_backup', False):
-        try:
-            print(bundle_dict['name'] + '\t(' + humble_url + ')')
-            items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
-            bundle_dict['tier_item_data'] = items_dict
-            return bundle_dict
-        except Exception as e:
-            print('Exception in get_humble: ' + str(e))
-        return {}
-    else:
-        return bundle_dict
+    return bundle_dict
+
+
+def archive_bundle(url):
+    try:
+        # archive using archive.org
+        user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
+                     "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                     "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
+        wayback = Url(url, user_agent)  # created the waybackpy instance.
+        archive = wayback.save()  # saved the link to the internet archive
+        print(f'Bundle {url} archived in {archive.archive_url}')  # printed the URL.
+    except Exception as e:
+        print('Error saving URL to archive ' + str(e))
 
 
 def main():
     parse_arguments()
-    for url in run_parameters['bundles']:
+    json_from_file = run_parameters['files'] != []
+    all_data_sources = run_parameters['files'] if json_from_file else run_parameters['bundles']
+    for url in all_data_sources:
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
         if run_parameters['archive']:
-            try:
-                # archive usign archive.org
-                user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
-                             "AppleWebKit/537.36 (KHTML, like Gecko) " \
-                             "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
-                wayback = Url(url, user_agent)  # created the waybackpy instance.
-                archive = wayback.save()  # saved the link to the internet archive
-                print(archive.archive_url)  # printed the URL.
-            except Exception as e:
-                print('Error saving URL to archive ' + str(e))
-        print_bundle_dict(get_humble(url))
+            archive_bundle(url)
+        print_bundle_dict(get_humble(url, is_file=json_from_file))
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
 
 
