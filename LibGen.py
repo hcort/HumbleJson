@@ -97,8 +97,11 @@ def get_page_count(soup, start_url, is_fiction=False):
         next_page_link = soup.select('.catalog_paginator a')
         next_page_url = run_parameters['libgen_base'][:-1] + re.sub('&page=([0-9]+)', '', next_page_link[0]['href'])
     else:
-        lines_split = re.split('\r\n', last_page_link[0].string)
-        num_last_page = re.match('\s+([0-9]+),', lines_split[3])
+        lines_split = last_page_link[0].string.split('\n')
+        try:
+            num_last_page = re.match('\s+([0-9]+),', lines_split[3])
+        except Exception as err:
+            print('!')
         next_page_url = start_url
     if num_last_page:
         page_number = int(num_last_page.group(1))
@@ -109,7 +112,7 @@ def get_found_items(soup, is_fiction=False):
     items_found = soup.select_one(items_found_selector_fiction) if is_fiction else soup.select_one(items_found_selector)
     if not items_found:
         return 0
-    num_items = re.search('([0-9]+) files found', items_found.text)
+    num_items = re.search('([0-9]+) files found', items_found.text.replace(u'\xa0', ''))
     if not num_items:
         return 0
     return num_items.group(1)
