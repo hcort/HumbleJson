@@ -1,8 +1,9 @@
+import datetime
 import getopt
-import json
 import os
 import sys
-import datetime
+
+from slugify import slugify
 
 # base_url = "http://libgen.rs/"
 libgen_search = {
@@ -30,7 +31,7 @@ def delete_all_files(folder):
         os.remove(os.path.join(folder, item))
 
 
-def wait_for_file_download_complete(folder):
+def wait_for_file_download_complete(folder, path):
     download_complete = False
     last_size = -1
     init_time = datetime.datetime.now()
@@ -52,6 +53,21 @@ def wait_for_file_download_complete(folder):
             file_exists_retries -= 1
         if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
             raise TimeoutError('Max number of retries downloading')
+    move_file_download_folder(folder, path)
+
+
+def move_file_download_folder(dl_folder, destination_folder):
+    download_filename = os.listdir(dl_folder)[0]
+    filename, file_extension = os.path.splitext(download_filename)
+    valid_filename = f'{slugify(filename, max_length=100)}.{file_extension}'
+    os.rename(
+        os.path.join(dl_folder, download_filename),
+        os.path.join(dl_folder, valid_filename)
+    )
+    os.replace(
+        os.path.join(dl_folder, valid_filename),
+        os.path.join(destination_folder, valid_filename)
+    )
 
 
 def generate_filename(path, filename, extension):
@@ -69,20 +85,6 @@ def generate_filename(path, filename, extension):
 def get_backup_file(humble_url):
     url_path = humble_url.split('/')[-1]
     return os.path.join(run_parameters['output_dir'], url_path)
-
-
-def save_to_backup_file(backup_file, bundle_dict):
-    with open(backup_file, 'w') as file:
-        json.dump(bundle_dict, file)
-
-
-def save_bundle_json(bundle_dict):
-    # path = get_output_path(run_parameters, bundle_dict['machine_name'])
-    # path = os.path.join(path, bundle_dict['machine_name'] + '.json')
-    # with open(path, 'w') as f:
-    #     f.write(json.dumps(bundle_dict))
-    backup_file = get_backup_file(bundle_dict['url'])
-    save_to_backup_file(backup_file, bundle_dict)
 
 
 def display_help():

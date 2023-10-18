@@ -8,13 +8,11 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from slugify import slugify
 from tqdm import tqdm
 from requests import codes
 
 
-from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete, \
-    save_to_backup_file
+from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete
 
 OPERA_PREFS = "C:\\Users\\Héctor\\Desktop\\compartido_msedge\\PyCharmProjects\\HumbleJson\\opera_prefs\\"
 
@@ -41,7 +39,7 @@ class OperaDriver:
     def __del__(self):
         if self.__driver:
             self.__driver.close()
-        shutil.rmtree(self.__download_folder)
+        shutil.rmtree(self.__download_folder, ignore_errors=True)
 
     @property
     def download_folder(self):
@@ -68,7 +66,8 @@ class OperaDriver:
         with open(os.path.join(OPERA_PREFS, 'Preferences_custom.txt'), 'r') as file:
             prefs_dict = json.load(file)
             prefs_dict['download']['default_directory'] = self.__download_folder
-            save_to_backup_file(os.path.join(OPERA_PREFS, 'Preferences'), prefs_dict)
+            with open(os.path.join(OPERA_PREFS, 'Preferences'), 'w') as file:
+                json.dump(prefs_dict, file)
 
 
 selenium_driver = OperaDriver()
@@ -150,18 +149,7 @@ def get_book_selenium(css_path, book_url, path, filename, extension, md5):
         delete_all_files(selenium_driver.download_folder)
         link.click()
         # TODO control for Bad Gateway info
-        wait_for_file_download_complete(selenium_driver.download_folder)
-        download_filename = os.listdir(selenium_driver.download_folder)[0]
-        filename, file_extension = os.path.splitext(download_filename)
-        valid_filename = f'{slugify(filename, max_length=100)}.{file_extension}'
-        os.rename(
-            os.path.join(selenium_driver.download_folder, download_filename),
-            os.path.join(selenium_driver.download_folder, valid_filename)
-        )
-        os.replace(
-            os.path.join(selenium_driver.download_folder, valid_filename),
-            os.path.join(path, valid_filename)
-        )
+        wait_for_file_download_complete(selenium_driver.download_folder, path)
         return True
     except Exception as ex:
         print(f'Unable to download {download_url} - {ex}')
