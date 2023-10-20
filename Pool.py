@@ -70,24 +70,24 @@ def wait_for_file_download_complete(folder, path):
     while not download_complete:
         from time import sleep
         sleep(3)
-        files = os.listdir(folder)
-        if files:
-            if os.path.isfile(os.path.join(folder, file_downloading)):
-                current_size = os.path.getsize(os.path.join(folder, file_downloading))
-            is_file = os.path.isfile(os.path.join(folder, file_downloading_base))
-            size_not_changed = (last_size == current_size)
-            download_complete = is_file and size_not_changed
-            if last_size == current_size:
-                size_change_retries -= 1
-            else:
-                size_change_retries = 200
-            last_size = current_size
+        if os.path.isfile(os.path.join(folder, file_downloading)):
+            current_size = os.path.getsize(os.path.join(folder, file_downloading))
         else:
             file_exists_retries -= 1
+        is_file = os.path.isfile(os.path.join(folder, file_downloading_base))
+        size_not_changed = (last_size == current_size)
+        download_complete = is_file and size_not_changed
+        if last_size == current_size:
+            size_change_retries -= 1
+        else:
+            size_change_retries = 200
+        last_size = current_size
         if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
-            raise TimeoutError('Max number of retries downloading')
-    move_file_download_folder(folder, path, file_downloading_base)
+            break
     remove_file_from_waiting_list(file_downloading)
+    if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
+        raise TimeoutError('Max number of retries downloading')
+    move_file_download_folder(folder, path, file_downloading_base)
     return True
 
 
