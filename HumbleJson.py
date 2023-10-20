@@ -90,15 +90,13 @@ def item_in_bundle_dict_to_str(item, print_desc=False):
         desc=item['description'] if print_desc else '')
 
 
-def print_bundle_item(bundle_dict=None, key=None, index_str=''):
+def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
     item = bundle_dict['tier_item_data'].get(key, None)
     if not item:
         return
     if item.get('downloaded', False):
         return
     print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
-    # start thread pool
-    thread_pool.bundle_dict = bundle_dict
     try:
         if not item.get('books_found', {}):
             books_found = search_libgen_by_title(item['name'])
@@ -108,6 +106,28 @@ def print_bundle_item(bundle_dict=None, key=None, index_str=''):
         else:
             filtered_books = dict(item['books_found'])
         print(filtered_books)
+        if not item.get('books_found', {}):
+            bundle_dict.set_all_books_downloaded(key)
+    except Exception as err:
+        print(f'Error searching book: {item["name"]} - {err}')
+    bundle_dict.save_to_file()
+    print('--------------------------------------------')
+
+
+def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
+    item = bundle_dict['tier_item_data'].get(key, None)
+    if not item:
+        return
+    if item.get('downloaded', False):
+        return
+    if not item.get('books_found', {}):
+        return
+    print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
+    # start thread pool
+    thread_pool.bundle_dict = bundle_dict
+    try:
+        filtered_books = dict(item['books_found'])
+        print(json.dumps(filtered_books, sort_keys=True, indent=4))
         for idx, md5 in enumerate(filtered_books):
             if not run_parameters['libgen_mirrors']:
                 run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
@@ -144,16 +164,32 @@ def get_tiers(bundle_dict):
     return bundle_dict['tier_display_data']
 
 
-def print_bundle_dict(bundle_dict):
-    print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
+def search_books_by_tier(bundle_dict):
     tiers = get_tiers(bundle_dict)
-    clean_upper_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
         print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
         for tier_idx, name in enumerate(tier_components):
-            print_bundle_item(bundle_dict=bundle_dict, key=name,
-                              index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
+            search_books_to_bundle_item(bundle_dict=bundle_dict, key=name,
+                                        index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
+
+
+def download_books_by_tier(bundle_dict):
+    tiers = get_tiers(bundle_dict)
+    for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
+        tier_components = tiers[tier].get('tier_item_machine_names', [])
+        print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
+        for tier_idx, name in enumerate(tier_components):
+            download_books_from_bundle_item(bundle_dict=bundle_dict, key=name,
+                                            index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
+
+
+def print_bundle_dict(bundle_dict):
+    print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
+    tiers = get_tiers(bundle_dict)
+    clean_upper_tiers(bundle_dict)
+    search_books_by_tier(bundle_dict)
+    download_books_by_tier(bundle_dict)
     bundle_dict.save_to_file()
 
 
