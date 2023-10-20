@@ -1,4 +1,3 @@
-import datetime
 import getopt
 import os
 import sys
@@ -31,33 +30,8 @@ def delete_all_files(folder):
         os.remove(os.path.join(folder, item))
 
 
-def wait_for_file_download_complete(folder, path):
-    download_complete = False
-    last_size = -1
-    init_time = datetime.datetime.now()
-    file_exists_retries = 10
-    size_change_retries = 200
-    while not download_complete:
-        from time import sleep
-        sleep(3)
-        files = os.listdir(folder)
-        if files:
-            current_size = os.path.getsize(os.path.join(folder, files[0]))
-            download_complete = not (files[0].endswith('opdownload')) and (last_size == current_size)
-            if last_size == current_size:
-                size_change_retries -= 1
-            else:
-                size_change_retries = 200
-            last_size = current_size
-        else:
-            file_exists_retries -= 1
-        if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
-            raise TimeoutError('Max number of retries downloading')
-    move_file_download_folder(folder, path)
-
-
-def move_file_download_folder(dl_folder, destination_folder):
-    download_filename = os.listdir(dl_folder)[0]
+def move_file_download_folder(dl_folder, destination_folder, download_filename):
+    # download_filename = os.listdir(dl_folder)[0]
     filename, file_extension = os.path.splitext(download_filename)
     valid_filename = f'{slugify(filename, max_length=100)}.{file_extension}'
     os.rename(

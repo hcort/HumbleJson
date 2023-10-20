@@ -1,9 +1,11 @@
 import os
 import urllib
 from urllib.parse import urlparse
+
 from bs4 import Tag
 
 from Connections import get_soup_from_page, get_book_requests, get_book_selenium, selenium_driver
+from Pool import thread_pool
 
 
 def create_dir(path):
@@ -62,7 +64,7 @@ def get_download_link_from_library_lol(run_parameters, book_url, md5, path):
         get_book_requests(download_link, path, filename)
 
 
-def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
+def get_download_link_from_libgen_rocks(run_parameters, bundle_data, bundle_item, book, md5, path):
     """
         Every libgen mirror has minor differences.
 
@@ -83,8 +85,10 @@ def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
     if soup:
         css_path = '#main td:nth-of-type(2) a'
         if selenium_driver.use_opera_vpn:
-            return get_book_selenium(css_path=css_path, book_url='', path=path,
-                              filename='', extension=book['extension'], md5=md5)
+            download_click = get_book_selenium(css_path=css_path, book_url='', path=path,
+                                               filename='', extension=book['extension'], md5=md5)
+            if download_click:
+                thread_pool.add_selenium_download(bundle_item, md5, selenium_driver.download_folder, path)
         else:
             get_link = soup.select(css_path)
             if get_link:
@@ -97,9 +101,10 @@ def get_download_link_from_libgen_rocks(run_parameters, book, md5, path):
     return False
 
 
-def get_file_from_url(run_parameters, bundle_data, book, md5):
+def get_file_from_url(run_parameters, bundle_data, bundle_item, book, md5):
     if (not run_parameters) or (not run_parameters['libgen_mirrors']) or \
             (not bundle_data) or (not book['url']) or (not md5):
         return
     path = get_output_path(run_parameters=run_parameters, bundle_name=bundle_data.get('machine_name', ''))
-    return get_download_link_from_libgen_rocks(run_parameters=run_parameters, book=book, md5=md5, path=path)
+    return get_download_link_from_libgen_rocks(run_parameters=run_parameters, bundle_data=bundle_data,
+                                               bundle_item=bundle_item, book=book, md5=md5, path=path)

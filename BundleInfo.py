@@ -47,7 +47,7 @@ class BundleInfo:
             self.__backup_file = get_backup_file(self.__dict['url'])
         return self.__backup_file
 
-    @property
+    @backup_file.setter
     def backup_file(self, backup_file=None):
         if not backup_file:
             self.__backup_file = get_backup_file(self.__dict['url'])
@@ -71,6 +71,8 @@ class BundleInfo:
     def set_book_downloaded(self, key, book_md5):
         with mutex:
             self.__dict['tier_item_data'][key]['books_found'].pop(book_md5)
+            if not self.__dict['tier_item_data'][key]['books_found']:
+                self.__dict['tier_item_data'][key]['downloaded'] = True
             self.save_to_file(lock=False)
 
     def set_all_books_downloaded(self, key, downloaded=True):

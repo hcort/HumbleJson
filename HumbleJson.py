@@ -17,6 +17,7 @@ from Connections import get_soup_from_page
 from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
 from LibGenDownload import get_mirror_list, get_file_from_url, get_output_path
+from Pool import thread_pool
 from json import load, loads
 from utils import parse_arguments, run_parameters, get_backup_file
 
@@ -96,6 +97,8 @@ def print_bundle_item(bundle_dict=None, key=None, index_str=''):
     if item.get('downloaded', False):
         return
     print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
+    # start thread pool
+    thread_pool.bundle_dict = bundle_dict
     try:
         if not item.get('books_found', {}):
             books_found = search_libgen_by_title(item['name'])
@@ -109,10 +112,8 @@ def print_bundle_item(bundle_dict=None, key=None, index_str=''):
             if not run_parameters['libgen_mirrors']:
                 run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
             print('{}/{}'.format(idx + 1, len(filtered_books)))
-            book_downloaded = get_file_from_url(run_parameters=run_parameters,
-                                                bundle_data=bundle_dict, book=filtered_books[md5], md5=md5)
-            if book_downloaded:
-                bundle_dict.set_book_downloaded(key, md5)
+            get_file_from_url(run_parameters=run_parameters,
+                              bundle_data=bundle_dict, bundle_item=key, book=filtered_books[md5], md5=md5)
         if not item.get('books_found', {}):
             bundle_dict.set_all_books_downloaded(key)
     except Exception as err:
@@ -151,7 +152,7 @@ def print_bundle_dict(bundle_dict):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
         print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
         for tier_idx, name in enumerate(tier_components):
-            print_bundle_item(bundle_data=bundle_dict, key=name,
+            print_bundle_item(bundle_dict=bundle_dict, key=name,
                               index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
     bundle_dict.save_to_file()
 

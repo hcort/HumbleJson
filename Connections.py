@@ -11,22 +11,10 @@ from selenium.webdriver.common.by import By
 from tqdm import tqdm
 from requests import codes
 
-
-from utils import generate_filename, run_parameters, delete_all_files, wait_for_file_download_complete
+from Pool import max_download_limit
+from utils import generate_filename, run_parameters, delete_all_files
 
 OPERA_PREFS = "C:\\Users\\Héctor\\Desktop\\compartido_msedge\\PyCharmProjects\\HumbleJson\\opera_prefs\\"
-
-
-def get_driver_opera(
-        # opera_exe_location="C:\\Users\\Héctor\\AppData\\Local\\Programs\\Opera\\opera.exe",
-        opera_exe_location='',
-        opera_preferences_location=OPERA_PREFS):
-    # use custom preferences file to change the download folder
-    from selenium.webdriver.opera.options import Options
-    opera_options = Options()
-    opera_options.binary_location = opera_exe_location
-    opera_options.add_argument(f'user-data-dir={opera_preferences_location}')
-    return webdriver.Opera(options=opera_options)
 
 
 class OperaDriver:
@@ -35,11 +23,35 @@ class OperaDriver:
         self.__driver = None
         self.__download_folder = None
         self.__use_opera_vpn = False
+        self.__opera_temp_prefs = None
 
     def __del__(self):
+        # wait for downloads to finish
         if self.__driver:
             self.__driver.close()
         shutil.rmtree(self.__download_folder, ignore_errors=True)
+        shutil.rmtree(self.__opera_temp_prefs, ignore_errors=True)
+
+    def get_driver_opera(self,
+                         # opera_exe_location="C:\\Users\\Héctor\\AppData\\Local\\Programs\\Opera\\opera.exe",
+                         opera_exe_location='',
+                         opera_preferences_location=OPERA_PREFS):
+        # use custom preferences file to change the download folder
+        from selenium.webdriver.opera.options import Options
+        opera_options = Options()
+        opera_options.binary_location = opera_exe_location
+        self.__opera_temp_prefs = os.path.join(os.getcwd(), 'opera_prefs_temp')
+        shutil.rmtree(self.__opera_temp_prefs, ignore_errors=True)
+        os.mkdir(self.__opera_temp_prefs)
+        self.copy_preferences_file()
+        self.set_download_folder()
+        self.delete_history()
+        opera_options.add_argument(f'user-data-dir={self.__opera_temp_prefs}')
+        self.__driver = webdriver.Opera(options=opera_options)
+
+    def copy_preferences_file(self):
+        shutil.copyfile(os.path.join(OPERA_PREFS, 'Preferences_custom.txt'),
+                        os.path.join(self.__opera_temp_prefs, 'Preferences'))
 
     @property
     def download_folder(self):
@@ -54,8 +66,7 @@ class OperaDriver:
     @property
     def driver(self):
         if not self.__driver:
-            self.set_download_folder()
-            self.__driver = get_driver_opera()
+            self.get_driver_opera()
             self.__use_opera_vpn = True
         return self.__driver
 
@@ -63,11 +74,16 @@ class OperaDriver:
         time_str = datetime.datetime.now().strftime('%Y%m%d_%H%M')
         self.__download_folder = os.path.join(run_parameters['output_dir'], time_str)
         os.makedirs(self.__download_folder, exist_ok=True)
-        with open(os.path.join(OPERA_PREFS, 'Preferences_custom.txt'), 'r') as file:
-            prefs_dict = json.load(file)
+        with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'r') as file_org:
+            prefs_dict = json.load(file_org)
             prefs_dict['download']['default_directory'] = self.__download_folder
-            with open(os.path.join(OPERA_PREFS, 'Preferences'), 'w') as file:
-                json.dump(prefs_dict, file)
+        if prefs_dict:
+            with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'w') as file_dst:
+                json.dump(prefs_dict, file_dst)
+
+    def delete_history(self):
+        if os.path.isfile(os.path.join(OPERA_PREFS, 'History')):
+            os.remove(os.path.join(OPERA_PREFS, 'History'))
 
 
 selenium_driver = OperaDriver()
@@ -146,23 +162,11 @@ def get_book_selenium(css_path, book_url, path, filename, extension, md5):
     download_url = selenium_driver.driver.current_url
     try:
         link = selenium_driver.driver.find_element(By.CSS_SELECTOR, css_path)
-        delete_all_files(selenium_driver.download_folder)
+        # delete_all_files(selenium_driver.download_folder)
+        print('Acquiring semaphore' + max_download_limit.__str__())
+        max_download_limit.acquire()
         link.click()
-        # TODO control for Bad Gateway info
-        wait_for_file_download_complete(selenium_driver.download_folder, path)
         return True
     except Exception as ex:
         print(f'Unable to download {download_url} - {ex}')
     return False
-
-
-def test_opera():
-    driver = get_driver_opera()
-    driver.get("https://libgen.is")
-    import time
-    time.sleep(50000)
-
-
-# Lanzamos la función principal
-if __name__ == "__main__":
-    test_opera()
