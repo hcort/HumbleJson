@@ -1,14 +1,17 @@
+"""
+    Some common utilities used by the rest of modules
+
+"""
+
 import getopt
 import os
 import sys
 
 from slugify import slugify
 
-# base_url = "http://libgen.rs/"
-libgen_search = {
-    'base_url': "https://libgen.is/",
-    'search_path': "search.php"
-}
+# base_url =
+# http://libgen.rs/"
+libgen_search = dict(base_url='https://libgen.is/', search_path='search.php')
 # libgen_search = {
 #     'base_url': "https://libgen.li/",
 #     'search_path': "index.php"
@@ -52,7 +55,7 @@ def generate_filename(path, filename, extension):
         idx = 0
         while os.path.exists(numbered_name):
             idx += 1
-            numbered_name = '{}_{}.{}'.format(name_without_ext, idx, extension)
+            numbered_name = f'{name_without_ext}_{idx}.{extension}'
     return numbered_name
 
 
@@ -73,8 +76,8 @@ def display_help():
 
 def parse_arguments():
     argument_list = sys.argv[1:]
-    options = "hu:ao:l:"
-    long_options = ["help", "urls=", "archive",  "out=", "libgen=", "file="]
+    options = 'hu:ao:l:'
+    long_options = ['help', 'urls=', 'archive',  'out=', 'libgen=', 'file=']
     try:
         arguments, values = getopt.getopt(argument_list, options, long_options)
         for current_argument, current_value in arguments:

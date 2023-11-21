@@ -1,3 +1,10 @@
+"""
+    Functions to extract the download links for the books in LibGen.
+    Different LibGen mirrors may have different HTML structures, so we have to build custom selectors
+
+    The actual downloads have been moved to Connections
+
+"""
 import os
 import urllib
 from urllib.parse import urlparse
@@ -42,7 +49,7 @@ def get_mirror_list(libgen_md5_url=''):
                 mirror_location = 'tr:nth-child(18) td a'
             mirrors = soup.select(mirror_location)
             for mirror in mirrors:
-                if type(mirror) is Tag:
+                if isinstance(mirror, Tag):
                     url_parts = urlparse(mirror.get('href', ''))
                     if url_parts.scheme.find('http') >= 0:
                         mirror_list.append(url_parts.hostname)
@@ -53,9 +60,9 @@ def get_download_link_from_library_lol(run_parameters, book_url, md5, path):
     # TODO if using the ipfs links we can get the filename from the "filename" parameter in the url
     url_parts = urlparse(book_url)
     if book_url.find('/fiction/') >= 0:
-        download_page_url = '{}://{}{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][0], url_parts.path)
+        download_page_url = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][0]}{url_parts.path}'
     else:
-        download_page_url = '{}://{}/main/{}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][0], md5)
+        download_page_url = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][0]}/main/{md5}'
     soup = get_soup_from_page(download_page_url)
     get_link = soup.select('#download a')
     if get_link:
@@ -80,20 +87,18 @@ def get_download_link_from_libgen_rocks(run_parameters, bundle_data, bundle_item
     """
     url_parts = urlparse(book['url'])
     # we need md5 and key parameters to generate a valid URL
-    download_page_url = '{}://{}/ads.php?md5={}'.format(url_parts.scheme, run_parameters['libgen_mirrors'][1], md5)
+    download_page_url = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][1]}/ads.php?md5={md5}'
     soup = get_soup_from_page(download_page_url)
     if soup:
         css_path = '#main td:nth-of-type(2) a'
         if selenium_driver.use_opera_vpn:
-            download_click = get_book_selenium(css_path=css_path, book_url='', path=path,
-                                               filename='', extension=book['extension'], md5=md5)
+            download_click = get_book_selenium(css_path=css_path)
             if download_click:
                 thread_pool.add_selenium_download(bundle_item, md5, selenium_driver.download_folder, path)
         else:
             get_link = soup.select(css_path)
             if get_link:
-                download_link = '{}://{}/{}'.format(url_parts.scheme,
-                                                    run_parameters['libgen_mirrors'][1], get_link[0]['href'])
+                download_link = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][1]}/{get_link[0]["href"]}'
                 # this link doesn't have a filename
                 return get_book_requests(download_link, path, filename='', extension=book['extension'], md5=md5)
     else:

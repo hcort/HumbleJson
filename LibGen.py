@@ -1,3 +1,21 @@
+"""
+    Search in Library Genesis
+
+    The only search parameter used is the title of the book
+
+    search_libgen_by_title returns a dictionary with all the search results
+
+    key: the MD5 that identifies the book in libgen
+    value: {
+                'title': ...
+                'author': ...
+                'publisher': ...
+                'extension': ...
+                'url': ...
+            }
+    The "url" field in the value is the page where we can get the download link of the file
+
+"""
 import re
 from functools import reduce
 from urllib.parse import quote
@@ -8,7 +26,7 @@ from utils import run_parameters
 
 titles_location_detailed_view = 'td:nth-child(3) b a'
 authors_location_detailed_view = 'tr:nth-child(3) td+ td'
-publisher_location_detailed_view = "tr:nth-child(5) td:nth-child(2)"
+publisher_location_detailed_view = 'tr:nth-child(5) td:nth-child(2)'
 ids_location_detailed_view = 'tr:nth-child(8) td:last-child'
 extension_location_detailed_view = 'tr:nth-of-type(10) td:last-child'
 extension_location_normal_view = '.c td:nth-child(9)'
@@ -19,9 +37,9 @@ titles_location_fiction = 'table.catalog td:nth-of-type(3) a'
 authors_location_fiction = '.catalog_authors'
 extension_location_fiction = '.catalog tbody td:nth-of-type(5)'
 
-items_found_selector = "body table:nth-of-type(2) td:nth-child(1) font"
-items_found_selector_fiction = ".catalog_paginator div:first-child"
-goto_fiction_selector = "body table:nth-of-type(2) td:nth-child(3) font a"
+items_found_selector = 'body table:nth-of-type(2) td:nth-child(1) font'
+items_found_selector_fiction = '.catalog_paginator div:first-child'
+goto_fiction_selector = 'body table:nth-of-type(2) td:nth-child(3) font a'
 last_page_selector = '#paginator_example_top td span a'
 
 fiction_page_selector = '.catalog_paginator .page_selector'
@@ -29,11 +47,11 @@ non_fiction_page_selector = 'body script:nth-of-type(1)'
 
 
 def append_author_string(x, y):
-    authors_str = x if type(x) is str else ''
-    if type(x) is Tag:
-        authors_str = '{0}; {1}'.format(authors_str, x.text) if authors_str != '' else x.text
-    if type(y) is Tag:
-        authors_str = '{0}; {1}'.format(authors_str, y.text) if authors_str != '' else y.text
+    authors_str = x if isinstance(x, str) else ''
+    if isinstance(x, Tag):
+        authors_str = f'{authors_str}; {x.text}' if authors_str != '' else x.text
+    if isinstance(y, Tag):
+        authors_str = f'{authors_str}; {y.text}' if authors_str != '' else y.text
     return authors_str
 
 
@@ -45,7 +63,7 @@ def build_url(libgen_url, title):
 
 
 def parse_extension_fiction(text):
-    # extension = "AAA / Size"
+    # extension = 'AAA / Size'
     if text:
         return text[:text.find(' /')].lower()
     return ''
@@ -58,7 +76,7 @@ def expand_tuple_into_dict(title, author, extension, publisher='', is_fiction=Tr
         'publisher': publisher.text if publisher else '',
         'extension': parse_extension_fiction(extension.text) if is_fiction else extension.text.lower(),
         'url': build_url(run_parameters['libgen_base'], title.get('href')) if is_fiction
-        else title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
+            else title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
     }
 
 
@@ -77,7 +95,7 @@ def generate_url_list(start_url, page_number):
     pending_pages = []
     if page_number > 1:
         for i in range(2, page_number + 1):
-            pending_pages.append(start_url + "&page=" + str(i))
+            pending_pages.append(f'{start_url}&page={i}')
     return pending_pages
 
 
@@ -93,15 +111,15 @@ def get_page_count(soup, start_url, is_fiction=False):
     if not last_page_link:
         return pending_pages
     if is_fiction:
-        num_last_page = re.match('page 1\s*/\s*([0-9]+)', last_page_link[0].text)
+        num_last_page = re.match(r'page 1\s*/\s*([0-9]+)', last_page_link[0].text)
         next_page_link = soup.select('.catalog_paginator a')
         next_page_url = run_parameters['libgen_base'][:-1] + re.sub('&page=([0-9]+)', '', next_page_link[0]['href'])
     else:
         lines_split = last_page_link[0].string.split('\n')
         try:
-            num_last_page = re.match('\s+([0-9]+),', lines_split[3])
+            num_last_page = re.match(r'\s+([0-9]+),', lines_split[3])
         except Exception as err:
-            print('!')
+            print(f'Error getting page count - {start_url} - {err}')
         next_page_url = start_url
     if num_last_page:
         page_number = int(num_last_page.group(1))
@@ -112,7 +130,7 @@ def get_found_items(soup, is_fiction=False):
     items_found = soup.select_one(items_found_selector_fiction) if is_fiction else soup.select_one(items_found_selector)
     if not items_found:
         return 0
-    num_items = re.search('([0-9]+) files found', items_found.text.replace(u'\xa0', ''))
+    num_items = re.search('([0-9]+) files found', items_found.text.replace('\xa0', ''))
     if not num_items:
         return 0
     return num_items.group(1)
@@ -148,7 +166,7 @@ def get_fiction_results(soup, is_fiction):
 def search_libgen(url, is_fiction=False):
     all_books = {}
     page_number = 1
-    url_with_page = url + "&page=" + str(page_number)
+    url_with_page = f'{url}&page={page_number}'
     soup = get_soup_from_page(url_with_page)
     # if soup is not valid it means get_soup has raised an exception that will be handled on an upper level
     num_items = get_found_items(soup, is_fiction)
@@ -160,7 +178,7 @@ def search_libgen(url, is_fiction=False):
             if not soup:
                 soup = get_soup_from_page(current_url)
             if not soup:
-                print('Unable to connecto to LibGen {}'.format(url_with_page))
+                print(f'Unable to connecto to LibGen {url_with_page}')
                 continue
             zipped = create_zipped_list(soup, is_fiction)
             new_dict = {extract_md5_from_title(z[0], is_fiction): zip_tuple_to_dict(z, is_fiction) for z in zipped}
@@ -172,7 +190,6 @@ def search_libgen(url, is_fiction=False):
 def search_libgen_by_title(title):
     if not run_parameters:
         return {}
-    page = '1'
     items_per_page = 100
     # query can be 'title', 'author', 'publisher'
     query = 'title'
@@ -180,8 +197,8 @@ def search_libgen_by_title(title):
     # format=mobi, format=epub
     urlencoded_query = quote(title.encode('utf-8'))
     # search_url = run_parameters['libgen_base'] + run_parameters['libgen_search_path'] +
-    # ?&req=" + urlencoded_query + "&res=" + \
-    #              str(items_per_page) + '&column=' + query + "&phrase=1&view=detailed"
+    # ?&req=' + urlencoded_query + '&res=' + \
+    #              str(items_per_page) + '&column=' + query + '&phrase=1&view=detailed'
     search_url = f'{run_parameters["libgen_base"]}{run_parameters["libgen_search_path"]}?&req={urlencoded_query}&' \
                  f'res={items_per_page}&column={query}&phrase=1&view=detailed'
     return search_libgen(search_url)

@@ -1,3 +1,9 @@
+"""
+    filter_search_results is used to reduce the noise from the LibGen search results.
+
+    We take all the books found using the title as the keywords and discard the ones that
+    don't match enough words in the title or author fields
+"""
 import re
 
 
@@ -31,11 +37,12 @@ def filter_search_results(humble_dict, libgen_dict):
             title_match = True
             mismatchs = 3
             for word in humble_title_words:
-                if not (word in libgen_title):
-                    mismatchs -= 1
-                    if mismatchs == 0:
-                        title_match = False
-                        break
+                if word in libgen_title:
+                    continue
+                mismatchs -= 1
+                if mismatchs == 0:
+                    title_match = False
+                    break
             # TODO sometimes humble author may be empty
             libgen_author = list(filter(lambda x: len(x) > 2, libgen_dict[libgen_item]['author'].lower().split()))
             libgen_author = set(map(sanitize_word, libgen_author))
