@@ -1,5 +1,25 @@
-import datetime
+"""
+    Thread pool to handle several simultaneous downloads
+
+    Initial version only works using the Opera driver.
+    In Opera, the browser handles the download and we only have to wait for it to finish. This is the
+    process done in each thread
+
+    Use MAX_SIMULTANEOUS_DOWNLOADS to create a semaphore that limits the number of downloads
+
+    The process of downloading is done sequentially:
+     - get_book_selenium (Connections) navigates to the download page and clicks on the download link
+     - add_selenium_download starts the waiting thread
+
+    To start a download we need that the driver clicks on the download link
+
+    There are two mutexes:
+     - bundle_dict_access_mutex protects the bundle data from concurrent write operations
+     - pool_running_mutex protects the webdriver to be closed before all the downloads have ended
+
+"""
 import os
+import time
 from multiprocessing.pool import ThreadPool
 from threading import Lock, Semaphore
 from time import sleep
@@ -11,13 +31,21 @@ wait_for_download_files = set()
 MAX_SIMULTANEOUS_DOWNLOADS = 2
 max_download_limit = Semaphore(MAX_SIMULTANEOUS_DOWNLOADS)
 
+# avoids concurrent access to the data in the bundle dict
+bundle_dict_access_mutex = Lock()
+
+# this mutex is acquired by the pool and not released until all threads are ended
+#
+pool_running_mutex = Lock()
+pending_files_mutex = Lock()
+
 
 thread_id = 0
 
 
 def get_thread_sequential_id():
     global thread_id
-    with mutex:
+    with bundle_dict_access_mutex:
         thread_id += 1
         return thread_id
 
@@ -30,25 +58,38 @@ def wait_and_retry(retries):
 
 
 def check_for_new_file(folder):
-    retries = 10
-    with mutex:
-        while len(os.listdir(folder)) == len(wait_for_download_files):
-            retries = wait_and_retry(retries)
+    with pending_files_mutex:
         retries = 10
-        while retries > 0:
-            # the download starts with a mangled filename with tmp extension before renaming to final name
-            for file in os.listdir(folder):
-                if (not file.endswith('.tmp')) and (file.endswith('.opdownload')) and (not (file in wait_for_download_files)):
-                    wait_for_download_files.add(file)
-                    print(f'Waiting for file: {file}')
-                    return file
-            retries = wait_and_retry(retries)
+        with bundle_dict_access_mutex:
+            while (len(os.listdir(folder)) == len(wait_for_download_files)) and (retries >= 0):
+                retries = wait_and_retry(retries)
+            retries = 10
+            while retries > 0:
+                # the download starts with a mangled filename with tmp extension before renaming to final name
+                # opdownload is only used in files bigger than some threshold, small files are downloaded with
+                # their own name
+                non_pending_files = [x for x in os.listdir(folder) if x not in wait_for_download_files]
+                print('Files in download folder not in list: ' + '\n'.join(non_pending_files))
+                print('Files in pending list: ' + '\n'.join(wait_for_download_files))
+                if not non_pending_files:
+                    wait_and_retry(retries)
+                else:
+                    for pending_file in non_pending_files:
+                        # if the file doesn't end with opdownload it might be a just finished download
+                        if pending_file.endswith('.opdownload') or (
+                                (not pending_file.endswith('.opdownload')) and (
+                                not (pending_file + '.opdownload') in wait_for_download_files)):
+                            wait_for_download_files.add(pending_file)
+                            print(f'Waiting for file: {pending_file}')
+                            return pending_file
+                retries -= 1
     return None
 
 
-def remove_file_from_waiting_list(file):
-    with mutex:
-        wait_for_download_files.remove(file)
+def remove_file_from_waiting_list_and_move(file_downloading, file_downloading_base, folder, path):
+    with pending_files_mutex:
+        wait_for_download_files.remove(file_downloading)
+        move_file_download_folder(folder, path, file_downloading_base)
 
 
 def wait_for_file_download_complete(folder, path):
@@ -56,7 +97,6 @@ def wait_for_file_download_complete(folder, path):
     print(f'Starting thread {wait_thread_id}')
     download_complete = False
     last_size = -1
-    init_time = datetime.datetime.now()
     file_exists_retries = 10
     size_change_retries = 200
     file_downloading = check_for_new_file(folder)
@@ -67,15 +107,15 @@ def wait_for_file_download_complete(folder, path):
     if file_downloading_extension != '.opdownload':
         # not temporary file (?)
         file_downloading_base = file_downloading
+    current_size = -1
     while not download_complete:
-        from time import sleep
-        sleep(3)
+        time.sleep(3)
         if os.path.isfile(os.path.join(folder, file_downloading)):
             current_size = os.path.getsize(os.path.join(folder, file_downloading))
         else:
             file_exists_retries -= 1
         is_file = os.path.isfile(os.path.join(folder, file_downloading_base))
-        size_not_changed = (last_size == current_size)
+        size_not_changed = last_size == current_size
         download_complete = is_file and size_not_changed
         if last_size == current_size:
             size_change_retries -= 1
@@ -84,10 +124,9 @@ def wait_for_file_download_complete(folder, path):
         last_size = current_size
         if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
             break
-    remove_file_from_waiting_list(file_downloading)
     if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
-        raise TimeoutError('Max number of retries downloading')
-    move_file_download_folder(folder, path, file_downloading_base)
+        raise TimeoutError(f'Max number of retries downloading {file_downloading_base}')
+    remove_file_from_waiting_list_and_move(file_downloading, file_downloading_base, folder, path)
     return True
 
 
@@ -100,24 +139,30 @@ def thread_file_download(download_folder, path, bundle_dict, bundle_item, md5):
             print(f'Unable to download {bundle_item} - {md5}')
     except Exception as err:
         print(f'Error downloading {bundle_item} - {md5} - {err}')
-    print('Releasing semaphore' + max_download_limit.__str__())
+    print(f'Releasing semaphore {max_download_limit}')
     max_download_limit.release()
 
 
 class LibgenDownloadPool:
+    """
+        LibgenDownloadPool encapsulates a thread pool.
+
+        It also has access to the BundleInfo dictionary to update the download status of each
+        book found.
+    """
 
     def __init__(self):
         self.__pool = ThreadPool(processes=4)
         self.__bundle_dict = None
         self.__pending_results = {}
+        # pool_running_mutex.acquire()
 
     def __del__(self):
+        print('close pool')
         # wait for threads to end
-        for bundle_item in self.__pending_results:
-            for md5_wait in bundle_item:
-                self.__pending_results[bundle_item][md5_wait].wait()
         self.__pool.close()
         self.__pool.join()
+        # pool_running_mutex.release()
 
     @property
     def bundle_dict(self):
@@ -130,11 +175,14 @@ class LibgenDownloadPool:
     def add_selenium_download(self, bundle_item, md5, download_folder, path):
         async_res = self.__pool.apply_async(thread_file_download,
                                             args=(download_folder, path, self.__bundle_dict, bundle_item, md5))
-        if not (bundle_item in self.__pending_results):
+        if bundle_item not in self.__pending_results:
             self.__pending_results[bundle_item] = {}
         self.__pending_results[bundle_item][md5] = async_res
 
+    def wait_for_all_threads(self):
+        for bundle_item, threads_waiting in self.__pending_results.items():
+            for md5_wait in threads_waiting:
+                self.__pending_results[bundle_item][md5_wait].wait()
 
-mutex = Lock()
 
 thread_pool = LibgenDownloadPool()
