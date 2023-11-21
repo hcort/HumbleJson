@@ -1,10 +1,13 @@
 """"
 
-Al leer una página de Humble Bundle los datos de cada producto están en el siguiente nodo:
+    Extract Humble Bundle info from the HTML code in the page:
 
-<script id="webpack-bundle-data" type="application/json">
-  {"bundleVars": ...}
-</script>
+        <script id="webpack-bundle-data" type="application/json">
+          {"bundleVars": ...}
+        </script>
+
+    Once extracted we can search for the books in LibGen and extract the download links
+    Then we can download each book in the bundle
 
 """
 import os
@@ -16,16 +19,16 @@ from BundleInfo import BundleInfo, BundleException
 from Connections import get_soup_from_page
 from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
-from LibGenDownload import get_mirror_list, get_file_from_url, get_output_path
+from LibGenDownload import get_mirror_list, get_file_from_url
 from Pool import thread_pool
-from json import load, loads
+from json import loads
 from utils import parse_arguments, run_parameters, get_backup_file
 
 
 def generate_author_publisher_string(list_of_names, key1, key2):
-    return ','.join(map(lambda item_in_list: "{key1} ({key2})".format(
-        key1=item_in_list.get(key1, ''),
-        key2=item_in_list.get(key2, '')), list_of_names))
+    return ','.join(map(lambda item_in_list:
+                        f'{item_in_list.get(key1, "")} ({item_in_list.get(key2, "")})',
+                        list_of_names))
 
 
 def extract_humble_dict_from_soup(soup):
@@ -83,11 +86,7 @@ def build_bundle_dict(humble_items):
 def item_in_bundle_dict_to_str(item, print_desc=False):
     if not item:
         return '***************ITEM DOES NOT EXIST***************'
-    return "{name} - {author}. [{pub}]\n{desc}".format(
-        name=item['name'],
-        author=item['author'],
-        pub=item['publisher'],
-        desc=item['description'] if print_desc else '')
+    return f"{item['name']} - {item['author']}. [{item['publisher']}]\n{item['description'] if print_desc else ''}"
 
 
 def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
@@ -96,7 +95,7 @@ def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
         return
     if item.get('downloaded', False):
         return
-    print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
+    print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     try:
         if not item.get('books_found', {}):
             books_found = search_libgen_by_title(item['name'])
@@ -122,7 +121,7 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
         return
     if not item.get('books_found', {}):
         return
-    print('{} - {}'.format(index_str, item_in_bundle_dict_to_str(item)))
+    print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     # start thread pool
     thread_pool.bundle_dict = bundle_dict
     try:
@@ -131,7 +130,7 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
         for idx, md5 in enumerate(filtered_books):
             if not run_parameters['libgen_mirrors']:
                 run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
-            print('{}/{}'.format(idx + 1, len(filtered_books)))
+            print(f'{idx + 1}/{len(filtered_books)}')
             get_file_from_url(run_parameters=run_parameters,
                               bundle_data=bundle_dict, bundle_item=key, book=filtered_books[md5], md5=md5)
         if not item.get('books_found', {}):
@@ -146,13 +145,18 @@ def clean_upper_tiers(bundle_dict):
     # bigger tiers contain smaller tiers
     # tier content: tier_1 = ['a', 'b'], tier_2 = ['a', 'b', 'c', 'd'], tier_3 = ['a', 'b', 'c', 'd', 'e', ...]
     new_tiers = {}
+    reversed_tier_order = list(reversed(bundle_dict['tier_order']))
+    new_tiers[reversed_tier_order[0]] = {
+        'tier_item_machine_names': bundle_dict['tier_display_data'][reversed_tier_order[0]]['tier_item_machine_names']
+    }
     for tier in reversed(bundle_dict['tier_order']):
         small_tier_items = bundle_dict['tier_display_data'][tier]['tier_item_machine_names']
-        for other_tier in bundle_dict['tier_display_data']:
+        reversed_tier_order.pop(0)
+        for other_tier in reversed_tier_order:
             if tier != other_tier:
                 large_tier_list = bundle_dict['tier_display_data'][other_tier]['tier_item_machine_names']
                 new_tiers[other_tier] = {
-                    'tier_item_machine_names': list(filter(lambda x: x not in small_tier_items, large_tier_list))
+                    'tier_item_machine_names': [x for x in large_tier_list if x not in small_tier_items]
                 }
     bundle_dict.set_tiers(new_tiers)
 
@@ -168,25 +172,24 @@ def search_books_by_tier(bundle_dict):
     tiers = get_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
-        print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
+        print(f'\n\n\n\nTIER {idx + 1}/{len(bundle_dict["tier_order"])}\n\n')
         for tier_idx, name in enumerate(tier_components):
             search_books_to_bundle_item(bundle_dict=bundle_dict, key=name,
-                                        index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
+                                        index_str=f'{tier_idx + 1}/{len(tier_components)}')
 
 
 def download_books_by_tier(bundle_dict):
     tiers = get_tiers(bundle_dict)
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
         tier_components = tiers[tier].get('tier_item_machine_names', [])
-        print('\n\n\n\nTIER {}/{}\n\n'.format(idx + 1, len(bundle_dict['tier_order'])))
+        print(f'\n\n\n\nTIER {idx + 1}/{len(bundle_dict["tier_order"])}\n\n')
         for tier_idx, name in enumerate(tier_components):
             download_books_from_bundle_item(bundle_dict=bundle_dict, key=name,
-                                            index_str='{}/{}'.format(tier_idx + 1, len(tier_components)))
+                                            index_str=f'{tier_idx + 1}/{len(tier_components)}')
 
 
 def print_bundle_dict(bundle_dict):
     print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
-    tiers = get_tiers(bundle_dict)
     clean_upper_tiers(bundle_dict)
     search_books_by_tier(bundle_dict)
     download_books_by_tier(bundle_dict)
@@ -196,9 +199,9 @@ def print_bundle_dict(bundle_dict):
 def archive_bundle(url):
     try:
         # archive using archive.org
-        user_agent = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)" \
-                     "AppleWebKit/537.36 (KHTML, like Gecko) " \
-                     "Chrome/90.0.4430.93 Mobile Safari/537.36"  # determined the user-agent.
+        user_agent = 'Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T)' \
+                     'AppleWebKit/537.36 (KHTML, like Gecko) ' \
+                     'Chrome/90.0.4430.93 Mobile Safari/537.36'  # determined the user-agent.
         wayback = Url(url, user_agent)  # created the waybackpy instance.
         archive = wayback.save()  # saved the link to the internet archive
         print(f'Bundle {url} archived in {archive.archive_url}')  # printed the URL.
@@ -208,7 +211,7 @@ def archive_bundle(url):
 
 def main():
     parse_arguments()
-    json_from_file = run_parameters['files'] != []
+    json_from_file = len(run_parameters['files']) > 0
     all_data_sources = run_parameters['files'] if json_from_file else run_parameters['bundles']
     for url in all_data_sources:
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
@@ -216,8 +219,9 @@ def main():
             archive_bundle(url)
         print_bundle_dict(get_bundle_dict(url, is_file=json_from_file))
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
+    thread_pool.wait_for_all_threads()
 
 
 # Lanzamos la función principal
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
