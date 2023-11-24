@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 import json
 from Pool import max_download_limit
-from utils import generate_filename, run_parameters
+from utils import generate_filename, run_parameters, move_file_download_folder
 
 OPERA_PREFERENCES_FOLDER = 'C:\\Users\\Héctor\\Desktop\\compartido_msedge\\PyCharmProjects\\HumbleJson\\opera_prefs\\'
 
@@ -45,11 +45,13 @@ class OperaDriver:
         self.__use_opera_vpn = False
         self.__opera_temp_prefs = None
         self.__opera_org_prefs = None
+        self.__destination_path = None
 
     def __del__(self):
         print('close driver')
         if self.__driver:
             self.__driver.close()
+        self._empty_downloads_folder()
         shutil.rmtree(self.__download_folder, ignore_errors=True)
         shutil.rmtree(self.__opera_temp_prefs, ignore_errors=True)
 
@@ -81,6 +83,14 @@ class OperaDriver:
         return self.__download_folder
 
     @property
+    def destination_path(self):
+        return self.__destination_path
+
+    @destination_path.setter
+    def destination_path(self, path):
+        self.__destination_path = path
+
+    @property
     def use_opera_vpn(self):
         return self.__use_opera_vpn
 
@@ -101,6 +111,13 @@ class OperaDriver:
         if prefs_dict:
             with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'w', encoding='utf-8') as file_dst:
                 json.dump(prefs_dict, file_dst)
+
+    def _empty_downloads_folder(self):
+        pending_files = os.listdir(self.__download_folder)
+        for item in pending_files:
+            file_downloading_base, file_downloading_extension = os.path.splitext(item)
+            if file_downloading_extension != '.opdownload':
+                move_file_download_folder(self.__download_folder, self.__destination_path, item)
 
 
 selenium_driver = OperaDriver()
@@ -179,4 +196,5 @@ def get_book_selenium(css_path):
         return True
     except Exception as ex:
         print(f'Unable to download {download_url} - {ex}')
+        max_download_limit.release()
     return False

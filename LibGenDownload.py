@@ -71,6 +71,32 @@ def get_download_link_from_library_lol(run_parameters, book_url, md5, path):
         get_book_requests(download_link, path, filename)
 
 
+def get_download_link_from_cloudfare_mirror(run_parameters, bundle_data, bundle_item, book, md5, path):
+    # book url              https://libgen.is/book/index.php?md5=8B010ACAD53B8D1228ABA81396F4BA04
+    # download link         https://libgen.li/ads.php?md5=8B010ACAD53B8D1228ABA81396F4BA04
+    # where i want to go    http://library.lol/main/8B010ACAD53B8D1228ABA81396F4BA04
+    # document.querySelector("#download > ul > li:nth-child(1) > a")
+    url_parts = urlparse(book['url'])
+    # we need md5 and key parameters to generate a valid URL
+    download_page_url = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][0]}/main/{md5}'
+    soup = get_soup_from_page(download_page_url)
+    if soup:
+        css_path = '#download > ul > li:nth-child(1) > a'
+        if selenium_driver.use_opera_vpn:
+            download_click = get_book_selenium(css_path=css_path)
+            if download_click:
+                thread_pool.add_selenium_download(bundle_item, md5, selenium_driver.download_folder, path)
+        else:
+            get_link = soup.select(css_path)
+            if get_link:
+                download_link = f'{url_parts.scheme}://{run_parameters["libgen_mirrors"][1]}/{get_link[0]["href"]}'
+                # this link doesn't have a filename
+                return get_book_requests(download_link, path, filename='', extension=book['extension'], md5=md5)
+    else:
+        print(f'Unable to get {download_page_url}')
+    return False
+
+
 def get_download_link_from_libgen_rocks(run_parameters, bundle_data, bundle_item, book, md5, path):
     """
         Every libgen mirror has minor differences.
@@ -111,5 +137,8 @@ def get_file_from_url(run_parameters, bundle_data, bundle_item, book, md5):
             (not bundle_data) or (not book['url']) or (not md5):
         return
     path = get_output_path(run_parameters=run_parameters, bundle_name=bundle_data.get('machine_name', ''))
-    return get_download_link_from_libgen_rocks(run_parameters=run_parameters, bundle_data=bundle_data,
+    selenium_driver.destination_path = path
+    return get_download_link_from_cloudfare_mirror(run_parameters=run_parameters, bundle_data=bundle_data,
                                                bundle_item=bundle_item, book=book, md5=md5, path=path)
+    # return get_download_link_from_libgen_rocks(run_parameters=run_parameters, bundle_data=bundle_data,
+    #                                            bundle_item=bundle_item, book=book, md5=md5, path=path)

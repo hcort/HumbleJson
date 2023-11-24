@@ -53,11 +53,12 @@ def get_thread_sequential_id():
 def wait_and_retry(retries):
     sleep(3)
     if retries == 0:
-        return TimeoutError('Max number of retries downloading - Download not started')
+        raise TimeoutError('Max number of retries downloading - Download not started')
     return retries - 1
 
 
 def check_for_new_file(folder):
+    time.sleep(3)
     with pending_files_mutex:
         retries = 10
         with bundle_dict_access_mutex:
