@@ -8,6 +8,8 @@
 import datetime
 import os
 import shutil
+import sys
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -56,18 +58,29 @@ class OperaDriver:
         shutil.rmtree(self.__opera_temp_prefs, ignore_errors=True)
 
     def get_driver_opera(self,
+                         # opera_exe_location=r'\opera_bin\102.0.4880.78\opera.exe',
                          opera_exe_location='',
                          opera_preferences_location=None):   # pylint: disable=unused-argument
         if not opera_preferences_location:
             opera_preferences_location = OPERA_PREFERENCES_FOLDER
         self.__opera_org_prefs = opera_preferences_location
         self.copy_preferences_file()
+        self._set_vpn_in_prefs()
         self.set_download_folder()
         opera_options = Options()
         opera_options.binary_location = opera_exe_location
         # use custom preferences file to change the download folder
         opera_options.add_argument(f'user-data-dir={self.__opera_temp_prefs}')
-        self.__driver = webdriver.Opera(options=opera_options)
+        try:
+            if opera_exe_location:
+                self.__driver = webdriver.Opera(options=opera_options, executable_path=opera_exe_location)
+            else:
+                self.__driver = webdriver.Opera(options=opera_options)
+            time.sleep(15)
+        except Exception as err:
+            print(f'Error creating driver {err}', file=sys.stderr)
+            self.__driver = None
+        pass
 
     def copy_preferences_file(self):
         self.__opera_temp_prefs = os.path.join(os.getcwd(), 'opera_prefs_temp')
@@ -112,10 +125,44 @@ class OperaDriver:
             with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'w', encoding='utf-8') as file_dst:
                 json.dump(prefs_dict, file_dst)
 
+    def _set_vpn_in_prefs(self):
+        """
+            I need this two elements in the preferences file
+
+            The first enables the VPN, the second tells the browser to download PDFs, not try to open them
+
+            "freedom": {
+                "proxy_switcher": {
+                    "automatic_connection": true,
+                    "enabled": true,
+                    "forbidden": false,
+                    "local_searches": false,
+                }
+            }
+
+            "plugins": {
+                "always_open_pdf_externally": true
+            },
+        """
+        with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'r', encoding='utf-8') as file_org:
+            prefs_dict = json.load(file_org)
+            prefs_dict['freedom'] = dict(proxy_switcher={
+                'automatic_connection': True,
+                'enabled': True,
+                'forbidden': False,
+                'local_searches': False,
+            })
+            prefs_dict['plugins'] = {
+                'always_open_pdf_externally': True
+            }
+        if prefs_dict:
+            with open(os.path.join(self.__opera_temp_prefs, 'Preferences'), 'w', encoding='utf-8') as file_dst:
+                json.dump(prefs_dict, file_dst)
+
     def _empty_downloads_folder(self):
         pending_files = os.listdir(self.__download_folder)
         for item in pending_files:
-            file_downloading_base, file_downloading_extension = os.path.splitext(item)
+            _, file_downloading_extension = os.path.splitext(item)
             if file_downloading_extension != '.opdownload':
                 move_file_download_folder(self.__download_folder, self.__destination_path, item)
 
@@ -131,7 +178,6 @@ def get_soup_from_page(current_url, use_opera_vpn=True):
 
 
 def get_soup_from_page_requests(current_url):
-    soup = None
     req = requests.get(current_url, timeout=30)
     if req.status_code != requests.codes.ok:
         return None
@@ -141,7 +187,6 @@ def get_soup_from_page_requests(current_url):
 
 
 def get_soup_from_page_selenium(current_url):
-    soup = None
     selenium_driver.driver.set_page_load_timeout(30)
     selenium_driver.driver.get(current_url)
     soup = BeautifulSoup(selenium_driver.driver.page_source, 'html.parser', from_encoding='utf-8')
@@ -195,6 +240,6 @@ def get_book_selenium(css_path):
         link.click()
         return True
     except Exception as ex:
-        print(f'Unable to download {download_url} - {ex}')
+        print(f'Unable to download {download_url} - {ex}', file=sys.stderr)
         max_download_limit.release()
     return False
