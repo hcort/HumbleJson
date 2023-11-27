@@ -17,6 +17,7 @@
 
 """
 import re
+import sys
 from functools import reduce
 from urllib.parse import quote
 from bs4 import Tag
@@ -69,19 +70,19 @@ def parse_extension_fiction(text):
     return ''
 
 
-def expand_tuple_into_dict(title, author, extension, publisher='', is_fiction=True):
+def expand_tuple_into_dict(title, author, extension, publisher=None, is_fiction=True):
     return {
         'title': title.text,
         'author': reduce(append_author_string, author.contents) if is_fiction else author.text,
         'publisher': publisher.text if publisher else '',
         'extension': parse_extension_fiction(extension.text) if is_fiction else extension.text.lower(),
-        'url': build_url(run_parameters['libgen_base'], title.get('href')) if is_fiction
-            else title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
+        'url': build_url(run_parameters['libgen_base'], title.get('href')) if is_fiction else
+        title.get('href', '').replace('../', run_parameters['libgen_base'], 1)
     }
 
 
 def zip_tuple_to_dict(iterable, is_fiction=True):
-    return expand_tuple_into_dict(*iterable, is_fiction)
+    return expand_tuple_into_dict(*iterable, is_fiction=is_fiction)
 
 
 def get_search_in_fiction_link(soup):
@@ -106,6 +107,7 @@ def get_page_count(soup, start_url, is_fiction=False):
     > all_pages = soup.select_one('#paginator_example_top td span a')
     """
     pending_pages = []
+    num_last_page = None
     page_number = 0
     last_page_link = soup.select(fiction_page_selector) if is_fiction else soup.select(non_fiction_page_selector)
     if not last_page_link:
@@ -119,7 +121,7 @@ def get_page_count(soup, start_url, is_fiction=False):
         try:
             num_last_page = re.match(r'\s+([0-9]+),', lines_split[3])
         except Exception as err:
-            print(f'Error getting page count - {start_url} - {err}')
+            print(f'Error getting page count - {start_url} - {err}', file=sys.stderr)
         next_page_url = start_url
     if num_last_page:
         page_number = int(num_last_page.group(1))

@@ -23,6 +23,7 @@ run_parameters = {
     'libgen_base': libgen_search['base_url'],
     'libgen_search_path': libgen_search['search_path'],
     'libgen_mirrors': [],
+    'libgen_download': 'cloudflare',
     'output_dir': '',
     'archive': False
 }

@@ -19,6 +19,7 @@
 
 """
 import os
+import sys
 import time
 from multiprocessing.pool import ThreadPool
 from threading import Lock, Semaphore
@@ -139,7 +140,7 @@ def thread_file_download(download_folder, path, bundle_dict, bundle_item, md5):
         else:
             print(f'Unable to download {bundle_item} - {md5}')
     except Exception as err:
-        print(f'Error downloading {bundle_item} - {md5} - {err}')
+        print(f'Error downloading {bundle_item} - {md5} - {err}', file=sys.stderr)
     print(f'Releasing semaphore {max_download_limit}')
     max_download_limit.release()
 

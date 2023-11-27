@@ -138,7 +138,9 @@ def get_file_from_url(run_parameters, bundle_data, bundle_item, book, md5):
         return
     path = get_output_path(run_parameters=run_parameters, bundle_name=bundle_data.get('machine_name', ''))
     selenium_driver.destination_path = path
-    return get_download_link_from_cloudfare_mirror(run_parameters=run_parameters, bundle_data=bundle_data,
-                                               bundle_item=bundle_item, book=book, md5=md5, path=path)
-    # return get_download_link_from_libgen_rocks(run_parameters=run_parameters, bundle_data=bundle_data,
-    #                                            bundle_item=bundle_item, book=book, md5=md5, path=path)
+    if run_parameters.get('libgen_download', '') == 'cloudflare':
+        return get_download_link_from_cloudfare_mirror(run_parameters=run_parameters, bundle_data=bundle_data,
+                                                       bundle_item=bundle_item, book=book, md5=md5, path=path)
+    else:
+        return get_download_link_from_libgen_rocks(run_parameters=run_parameters, bundle_data=bundle_data,
+                                                   bundle_item=bundle_item, book=book, md5=md5, path=path)

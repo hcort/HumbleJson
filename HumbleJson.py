@@ -11,6 +11,7 @@
 
 """
 import os
+import sys
 
 from waybackpy import Url
 
@@ -78,7 +79,7 @@ def build_bundle_dict(humble_items):
                 'description': item['description_text']
             }
         except Exception as e:
-            print('Error en display_items: ' + str(e))
+            print(f'Error en display_items: {e}', file=sys.stderr)
             pass
     return items_dict
 
@@ -108,7 +109,7 @@ def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
         if not item.get('books_found', {}):
             bundle_dict.set_all_books_downloaded(key)
     except Exception as err:
-        print(f'Error searching book: {item["name"]} - {err}')
+        print(f'Error searching book: {item["name"]} - {err}', file=sys.stderr)
     bundle_dict.save_to_file()
     print('--------------------------------------------')
 
@@ -136,7 +137,7 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
         if not item.get('books_found', {}):
             bundle_dict.set_all_books_downloaded(key)
     except Exception as err:
-        print(f'Error downloading {item["name"]} - {err}')
+        print(f'Error downloading {item["name"]} - {err}', file=sys.stderr)
     bundle_dict.save_to_file()
     print('------------------------------------------------')
 
@@ -206,7 +207,7 @@ def archive_bundle(url):
         archive = wayback.save()  # saved the link to the internet archive
         print(f'Bundle {url} archived in {archive.archive_url}')  # printed the URL.
     except Exception as e:
-        print('Error saving URL to archive ' + str(e))
+        print(f'Error saving URL to archive {e}', file=sys.stderr)
 
 
 def main():
