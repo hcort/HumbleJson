@@ -21,8 +21,8 @@ from Connections import get_soup_from_page
 from FilterSearchResults import filter_search_results
 from LibGen import search_libgen_by_title
 from LibGenDownload import get_mirror_list, get_file_from_url
-from Pool import thread_pool
 from json import loads
+from resources import humble_resources
 from utils import parse_arguments, run_parameters, get_backup_file
 
 
@@ -87,7 +87,7 @@ def build_bundle_dict(humble_items):
 def item_in_bundle_dict_to_str(item, print_desc=False):
     if not item:
         return '***************ITEM DOES NOT EXIST***************'
-    return f"{item['name']} - {item['author']}. [{item['publisher']}]\n{item['description'] if print_desc else ''}"
+    return f"{item['name']} - {item['author']}. [{item.get('publisher', '')}]\n{item.get('description', '') if print_desc else ''}"
 
 
 def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
@@ -124,20 +124,20 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
         return
     print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     # start thread pool
-    thread_pool.bundle_dict = bundle_dict
-    try:
-        filtered_books = dict(item['books_found'])
-        print(json.dumps(filtered_books, sort_keys=True, indent=4))
-        for idx, md5 in enumerate(filtered_books):
-            if not run_parameters['libgen_mirrors']:
-                run_parameters['libgen_mirrors'] = get_mirror_list(filtered_books[md5]['url'])
+    humble_resources.pool.bundle_dict = bundle_dict
+    filtered_books = dict(item['books_found'])
+    print(json.dumps(filtered_books, sort_keys=True, indent=4))
+    for idx, md5 in enumerate(filtered_books):
+        try:
+            all_mirrors = get_mirror_list(filtered_books[md5]['url'])
+            filtered_books[md5]['mirrors'] = all_mirrors
             print(f'{idx + 1}/{len(filtered_books)}')
             get_file_from_url(run_parameters=run_parameters,
                               bundle_data=bundle_dict, bundle_item=key, book=filtered_books[md5], md5=md5)
-        if not item.get('books_found', {}):
-            bundle_dict.set_all_books_downloaded(key)
-    except Exception as err:
-        print(f'Error downloading {item["name"]} - {err}', file=sys.stderr)
+        except Exception as err:
+            print(f'Error downloading {item["name"]} - {err}', file=sys.stderr)
+    if not item.get('books_found', {}):
+        bundle_dict.set_all_books_downloaded(key)
     bundle_dict.save_to_file()
     print('------------------------------------------------')
 
@@ -220,9 +220,9 @@ def main():
             archive_bundle(url)
         print_bundle_dict(get_bundle_dict(url, is_file=json_from_file))
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
-    thread_pool.wait_for_all_threads()
 
 
 # Lanzamos la función principal
 if __name__ == '__main__':
     main()
+    print('done')

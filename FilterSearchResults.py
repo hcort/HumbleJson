@@ -46,7 +46,8 @@ def filter_search_results(humble_dict, libgen_dict):
             # TODO sometimes humble author may be empty
             libgen_author = list(filter(lambda x: len(x) > 2, libgen_dict[libgen_item]['author'].lower().split()))
             libgen_author = set(map(sanitize_word, libgen_author))
-            author_match = False
+            # if author is empty then I don't filter
+            author_match = (len(humble_author_words) == 0)
             for word in humble_author_words:
                 author_match |= (word in libgen_author)
             if title_match and author_match:

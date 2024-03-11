@@ -9,13 +9,12 @@ import sys
 
 from slugify import slugify
 
-# base_url =
-# http://libgen.rs/"
-libgen_search = dict(base_url='https://libgen.is/', search_path='search.php')
-# libgen_search = {
-#     'base_url': "https://libgen.li/",
-#     'search_path': "index.php"
-# }
+libgen_search_libgen_rs = dict(base_url='https://libgen.rs/', search_path='search.php')
+libgen_search_libgen_is = dict(base_url='https://libgen.is/', search_path='search.php')
+libgen_search_libgen_li = dict(base_url='https://libgen.li/', search_path='index.php')
+libgen_search_libgen_rc = dict(base_url='https://libgen.rocks/', search_path='index.php')
+
+libgen_search = libgen_search_libgen_rs
 
 run_parameters = {
     'bundles': [],
@@ -23,10 +22,22 @@ run_parameters = {
     'libgen_base': libgen_search['base_url'],
     'libgen_search_path': libgen_search['search_path'],
     'libgen_mirrors': [],
-    'libgen_download': 'cloudflare',
+    # 'libgen_download': 'cloudflare',
     'output_dir': '',
     'archive': False
 }
+
+
+def update_run_parameters(search_mirror):
+    run_parameters['libgen_base'] = search_mirror['base_url']
+    run_parameters['libgen_search_path'] = search_mirror['search_path']
+
+
+def build_url(libgen_url, title):
+    if libgen_url[-1] == '/' and title[0] == '/':
+        return libgen_url[:-1] + title
+    else:
+        return libgen_url + title
 
 
 def delete_all_files(folder):

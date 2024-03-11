@@ -37,7 +37,6 @@ bundle_dict_access_mutex = Lock()
 
 # this mutex is acquired by the pool and not released until all threads are ended
 #
-pool_running_mutex = Lock()
 pending_files_mutex = Lock()
 
 
@@ -157,14 +156,13 @@ class LibgenDownloadPool:
         self.__pool = ThreadPool(processes=4)
         self.__bundle_dict = None
         self.__pending_results = {}
-        # pool_running_mutex.acquire()
 
     def __del__(self):
         print('close pool')
         # wait for threads to end
         self.__pool.close()
         self.__pool.join()
-        # pool_running_mutex.release()
+        print('pool closed')
 
     @property
     def bundle_dict(self):
@@ -185,6 +183,3 @@ class LibgenDownloadPool:
         for bundle_item, threads_waiting in self.__pending_results.items():
             for md5_wait in threads_waiting:
                 self.__pending_results[bundle_item][md5_wait].wait()
-
-
-thread_pool = LibgenDownloadPool()
