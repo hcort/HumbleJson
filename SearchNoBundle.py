@@ -11,7 +11,8 @@ from slugify import slugify
 
 from BundleInfo import BundleInfo
 from FilterSearchResults import filter_search_results
-from HumbleJson import download_books_by_tier
+from HumbleJson import iterate_tiers, search_books_to_bundle_item, \
+    download_books_from_bundle_item
 from LibGen import search_libgen_by_title
 from utils import run_parameters
 
@@ -36,9 +37,7 @@ def create_bundle_dict_mockup():
 def search_without_bundle(search_items):
     bundle_mockup = create_bundle_dict_mockup()
     for search in search_items:
-        item = search_in_libgen(search['title'], search['author'])
-        item_machine_name = slugify(f'{item["name"]}_{item["author"]}')
-        bundle_mockup['tier_item_data'][item_machine_name] = item
+        item_machine_name = slugify(f'{search["title"]}_{search["author"]}')
         bundle_mockup['tier_display_data']['all']['tier_item_machine_names'].append(item_machine_name)
     # save to file so it can be reprocessed another time
     backup_file = os.path.join(run_parameters['output_dir'], f'{bundle_mockup["machine_name"]}.json')
@@ -47,7 +46,8 @@ def search_without_bundle(search_items):
         json.dump(bundle_mockup, file)
     # we recover the file into a BundleInfo object
     bundle_object = BundleInfo.from_file(backup_file)
-    download_books_by_tier(bundle_object)
+    iterate_tiers(bundle_object, functor=search_books_to_bundle_item)
+    iterate_tiers(bundle_object, functor=download_books_from_bundle_item)
     bundle_object.save_to_file()
 
 

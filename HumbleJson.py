@@ -26,13 +26,11 @@ from resources import humble_resources
 from utils import parse_arguments, run_parameters, get_backup_file
 
 
-def generate_author_publisher_string(list_of_names, key1, key2):
-    return ','.join(map(lambda item_in_list:
-                        f'{item_in_list.get(key1, "")} ({item_in_list.get(key2, "")})',
-                        list_of_names))
-
-
-def extract_humble_dict_from_soup(soup):
+def extract_humble_dict_from_page(humble_url):
+    soup = get_soup_from_page(humble_url, use_opera_vpn=False)
+    if not soup:
+        raise BundleException(f'Failed to get {humble_url}')
+    # tiers no longer present in HTML code
     json_node_name = 'webpack-bundle-page-data'
     bundle_vars = soup.find('script', {'id': json_node_name})
     if bundle_vars:
@@ -49,14 +47,8 @@ def get_bundle_dict(humble_url, is_file):
     else:
         backup_file = get_backup_file(humble_url)
         if not os.path.isfile(backup_file):
-            soup = get_soup_from_page(humble_url, use_opera_vpn=False)
-            if not soup:
-                raise BundleException(f'Failed to get {humble_url}')
-            # tiers no longer present in HTML code
-            bundle_dict = extract_humble_dict_from_soup(soup)
+            bundle_dict = extract_humble_dict_from_page(humble_url)
             bundle_dict.backup_file = backup_file
-            items_dict = build_bundle_dict(bundle_dict['tier_item_data'])
-            bundle_dict['tier_item_data'] = items_dict
             bundle_dict['url'] = humble_url
             bundle_dict['from_backup'] = True
             bundle_dict.save_to_file()
@@ -65,29 +57,11 @@ def get_bundle_dict(humble_url, is_file):
     return bundle_dict
 
 
-def build_bundle_dict(humble_items):
-    items_dict = {}
-    for key in humble_items:
-        try:
-            item = humble_items[key]
-            items_dict[key] = {
-                'name': item['human_name'],
-                'author': item['developers'][0].get('developer-name', '') if item['developers'] else '',
-                'author_url': item['developers'][0].get('developer-url', '') if item['developers'] else '',
-                'publisher': item['publishers'][0].get('publisher-name', '') if item['publishers'] else '',
-                'publisher_url': item['publishers'][0].get('publisher-url', '') if item['publishers'] else '',
-                'description': item['description_text']
-            }
-        except Exception as e:
-            print(f'Error en display_items: {e}', file=sys.stderr)
-            pass
-    return items_dict
-
-
 def item_in_bundle_dict_to_str(item, print_desc=False):
     if not item:
         return '***************ITEM DOES NOT EXIST***************'
-    return f"{item['name']} - {item['author']}. [{item.get('publisher', '')}]\n{item.get('description', '') if print_desc else ''}"
+    return (f"{item['name']} - {item['author']}. [{item.get('publisher', '')}]\n"
+            f"{item.get('description', '') if print_desc else ''}")
 
 
 def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
@@ -105,7 +79,7 @@ def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
             bundle_dict.save_to_file()
         else:
             filtered_books = dict(item['books_found'])
-        print(filtered_books)
+        # print(filtered_books)
         if not item.get('books_found', {}):
             bundle_dict.set_all_books_downloaded(key)
     except Exception as err:
@@ -125,8 +99,8 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
     print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     # start thread pool
     humble_resources.pool.bundle_dict = bundle_dict
-    filtered_books = dict(item['books_found'])
-    print(json.dumps(filtered_books, sort_keys=True, indent=4))
+    filtered_books = item['books_found']
+    # print(json.dumps(filtered_books, sort_keys=True, indent=4))
     for idx, md5 in enumerate(filtered_books):
         try:
             all_mirrors = get_mirror_list(filtered_books[md5]['url'])
@@ -139,62 +113,15 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
     if not item.get('books_found', {}):
         bundle_dict.set_all_books_downloaded(key)
     bundle_dict.save_to_file()
-    print('------------------------------------------------')
 
 
-def clean_upper_tiers(bundle_dict):
-    # bigger tiers contain smaller tiers
-    # tier content: tier_1 = ['a', 'b'], tier_2 = ['a', 'b', 'c', 'd'], tier_3 = ['a', 'b', 'c', 'd', 'e', ...]
-    new_tiers = {}
-    reversed_tier_order = list(reversed(bundle_dict['tier_order']))
-    new_tiers[reversed_tier_order[0]] = {
-        'tier_item_machine_names': bundle_dict['tier_display_data'][reversed_tier_order[0]]['tier_item_machine_names']
-    }
-    for tier in reversed(bundle_dict['tier_order']):
-        small_tier_items = bundle_dict['tier_display_data'][tier]['tier_item_machine_names']
-        reversed_tier_order.pop(0)
-        for other_tier in reversed_tier_order:
-            if tier != other_tier:
-                large_tier_list = bundle_dict['tier_display_data'][other_tier]['tier_item_machine_names']
-                new_tiers[other_tier] = {
-                    'tier_item_machine_names': [x for x in large_tier_list if x not in small_tier_items]
-                }
-    bundle_dict.set_tiers(new_tiers)
-
-
-def get_tiers(bundle_dict):
-    # if the bundle is not tiered i create a fake tier with all the elements in the bundle
-    if not bundle_dict.get('tier_display_data', None):
-        bundle_dict.create_default_tiers()
-    return bundle_dict['tier_display_data']
-
-
-def search_books_by_tier(bundle_dict):
-    tiers = get_tiers(bundle_dict)
+def iterate_tiers(bundle_dict, functor):
     for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
-        tier_components = tiers[tier].get('tier_item_machine_names', [])
+        tier_components = bundle_dict['tier_display_data'][tier].get('tier_item_machine_names', [])
         print(f'\n\n\n\nTIER {idx + 1}/{len(bundle_dict["tier_order"])}\n\n')
         for tier_idx, name in enumerate(tier_components):
-            search_books_to_bundle_item(bundle_dict=bundle_dict, key=name,
+            functor(bundle_dict=bundle_dict, key=name,
                                         index_str=f'{tier_idx + 1}/{len(tier_components)}')
-
-
-def download_books_by_tier(bundle_dict):
-    tiers = get_tiers(bundle_dict)
-    for idx, tier in enumerate(reversed(bundle_dict['tier_order'])):
-        tier_components = tiers[tier].get('tier_item_machine_names', [])
-        print(f'\n\n\n\nTIER {idx + 1}/{len(bundle_dict["tier_order"])}\n\n')
-        for tier_idx, name in enumerate(tier_components):
-            download_books_from_bundle_item(bundle_dict=bundle_dict, key=name,
-                                            index_str=f'{tier_idx + 1}/{len(tier_components)}')
-
-
-def print_bundle_dict(bundle_dict):
-    print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
-    clean_upper_tiers(bundle_dict)
-    search_books_by_tier(bundle_dict)
-    download_books_by_tier(bundle_dict)
-    bundle_dict.save_to_file()
 
 
 def archive_bundle(url):
@@ -218,8 +145,15 @@ def main():
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
         if run_parameters['archive']:
             archive_bundle(url)
-        print_bundle_dict(get_bundle_dict(url, is_file=json_from_file))
+        bundle_dict = get_bundle_dict(url, is_file=json_from_file)
+        print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
+        # search_books_by_tier(bundle_dict)
+        # download_books_by_tier(bundle_dict)
+        iterate_tiers(bundle_dict, functor=search_books_to_bundle_item)
+        iterate_tiers(bundle_dict, functor=download_books_from_bundle_item)
+        bundle_dict.save_to_file()
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
+    humble_resources.pool.wait_for_all_threads()
 
 
 # Lanzamos la función principal

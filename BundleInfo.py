@@ -1,9 +1,11 @@
 """
     Definition of class BundleInfo, that encapsulates the information from a Humble Bundle
 """
+import sys
+from threading import Lock
+
 import json
 
-from Pool import bundle_dict_access_mutex
 from utils import get_backup_file
 
 
@@ -52,6 +54,8 @@ class BundleInfo:
     """
 
     def __init__(self, whole_bundle_dict=None, backup_file=None, from_file=False):
+        self.__bundle_dict_access_mutex = Lock()
+        self.__backup_file = backup_file
         if whole_bundle_dict is None:
             whole_bundle_dict = {}
         if from_file:
@@ -65,7 +69,8 @@ class BundleInfo:
                     'tier_order': whole_bundle_dict.get('bundleData', {}).get('tier_order', []),
                     'tier_display_data': whole_bundle_dict.get('bundleData', {}).get('tier_display_data', {})
                 }
-        self.__backup_file = backup_file
+            self.build_bundle_dict()
+            self.clean_upper_tiers()
 
     @classmethod
     def from_file(cls, backup_file):
@@ -73,14 +78,54 @@ class BundleInfo:
             return cls(whole_bundle_dict=json.load(content), backup_file=backup_file, from_file=True)
 
     def __getitem__(self, key):
+        if (key == 'tier_display_data') and (key not in self.__dict.keys()):
+            self.create_default_tiers()
         return self.__dict[key]
 
     def __setitem__(self, key, value):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict[key] = value
 
     def get(self, key, default=None):
         return self.__dict.get(key, default)
+
+    def build_bundle_dict(self):
+        humble_items = self.__dict['tier_item_data']
+        items_dict = {}
+        for key in humble_items:
+            try:
+                item = humble_items[key]
+                items_dict[key] = {
+                    'name': item['human_name'],
+                    'author': item['developers'][0].get('developer-name', '') if item['developers'] else '',
+                    'author_url': item['developers'][0].get('developer-url', '') if item['developers'] else '',
+                    'publisher': item['publishers'][0].get('publisher-name', '') if item['publishers'] else '',
+                    'publisher_url': item['publishers'][0].get('publisher-url', '') if item['publishers'] else '',
+                    'description': item['description_text']
+                }
+            except Exception as e:
+                print(f'Error en display_items: {e}', file=sys.stderr)
+        self.__dict['tier_item_data'] = items_dict
+
+    def clean_upper_tiers(self):
+        # bigger tiers contain smaller tiers
+        # tier content: tier_1 = ['a', 'b'], tier_2 = ['a', 'b', 'c', 'd'], tier_3 = ['a', 'b', 'c', 'd', 'e', ...]
+        new_tiers = {}
+        reversed_tier_order = list(reversed(self.__dict['tier_order']))
+        new_tiers[reversed_tier_order[0]] = {
+            'tier_item_machine_names': self.__dict['tier_display_data'][reversed_tier_order[0]][
+                'tier_item_machine_names']
+        }
+        for tier in reversed(self.__dict['tier_order']):
+            small_tier_items = self.__dict['tier_display_data'][tier]['tier_item_machine_names']
+            reversed_tier_order.pop(0)
+            for other_tier in reversed_tier_order:
+                if tier != other_tier:
+                    large_tier_list = self.__dict['tier_display_data'][other_tier]['tier_item_machine_names']
+                    new_tiers[other_tier] = {
+                        'tier_item_machine_names': [x for x in large_tier_list if x not in small_tier_items]
+                    }
+        self.set_tiers(new_tiers)
 
     @property
     def backup_file(self):
@@ -96,38 +141,41 @@ class BundleInfo:
             self.__backup_file = backup_file
 
     def save_to_file(self, lock=True):
-        if lock:
-            with bundle_dict_access_mutex:
+        if self.__backup_file:
+            if lock:
+                with self.__bundle_dict_access_mutex:
+                    with open(self.__backup_file, 'w', encoding='utf-8') as file:
+                        json.dump(self.__dict, file)
+            else:
                 with open(self.__backup_file, 'w', encoding='utf-8') as file:
                     json.dump(self.__dict, file)
         else:
-            with open(self.__backup_file, 'w', encoding='utf-8') as file:
-                json.dump(self.__dict, file)
+            print('BundleInfo: file not defined')
 
     def set_books_found(self, key, books_found):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict['tier_item_data'][key]['books_found'] = books_found
             self.save_to_file(lock=False)
 
     def set_book_downloaded(self, key, book_md5):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict['tier_item_data'][key]['books_found'].pop(book_md5)
             if not self.__dict['tier_item_data'][key]['books_found']:
                 self.__dict['tier_item_data'][key]['downloaded'] = True
             self.save_to_file(lock=False)
 
     def set_all_books_downloaded(self, key, downloaded=True):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict['tier_item_data'][key]['downloaded'] = downloaded
             self.save_to_file(lock=False)
 
     def set_tiers(self, new_tiers):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict['tier_display_data'] = new_tiers
             self.save_to_file(lock=False)
 
     def create_default_tiers(self):
-        with bundle_dict_access_mutex:
+        with self.__bundle_dict_access_mutex:
             self.__dict['tier_order'] = ['all']
             self.__dict['tier_display_data'] = {
                 'all': {

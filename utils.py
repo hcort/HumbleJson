@@ -88,8 +88,8 @@ def display_help():
 
 def parse_arguments():
     argument_list = sys.argv[1:]
-    options = 'hu:ao:l:'
-    long_options = ['help', 'urls=', 'archive',  'out=', 'libgen=', 'file=']
+    options = 'hu:f:ao:l:'
+    long_options = ['help', 'urls=', 'files=', 'archive',  'out=', 'libgen=', 'file=']
     try:
         arguments, values = getopt.getopt(argument_list, options, long_options)
         for current_argument, current_value in arguments:

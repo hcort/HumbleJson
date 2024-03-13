@@ -32,20 +32,13 @@ wait_for_download_files = set()
 MAX_SIMULTANEOUS_DOWNLOADS = 2
 max_download_limit = Semaphore(MAX_SIMULTANEOUS_DOWNLOADS)
 
-# avoids concurrent access to the data in the bundle dict
-bundle_dict_access_mutex = Lock()
-
-# this mutex is acquired by the pool and not released until all threads are ended
-#
-pending_files_mutex = Lock()
-
 
 thread_id = 0
 
 
 def get_thread_sequential_id():
     global thread_id
-    with bundle_dict_access_mutex:
+    with LibgenDownloadPool.thread_id_mutex:
         thread_id += 1
         return thread_id
 
@@ -59,9 +52,9 @@ def wait_and_retry(retries):
 
 def check_for_new_file(folder):
     time.sleep(3)
-    with pending_files_mutex:
+    with LibgenDownloadPool.pending_files_mutex:
         retries = 10
-        with bundle_dict_access_mutex:
+        with LibgenDownloadPool.download_folder_mutex:
             while (len(os.listdir(folder)) == len(wait_for_download_files)) and (retries >= 0):
                 retries = wait_and_retry(retries)
             retries = 10
@@ -88,19 +81,20 @@ def check_for_new_file(folder):
 
 
 def remove_file_from_waiting_list_and_move(file_downloading, file_downloading_base, folder, path):
-    with pending_files_mutex:
+    with LibgenDownloadPool.pending_files_mutex:
         wait_for_download_files.remove(file_downloading)
         move_file_download_folder(folder, path, file_downloading_base)
 
 
 def wait_for_file_download_complete(folder, path):
     wait_thread_id = get_thread_sequential_id()
-    print(f'Starting thread {wait_thread_id}')
+    print(f'wait_for_file_download_complete - Starting thread {wait_thread_id}')
     download_complete = False
     last_size = -1
     file_exists_retries = 10
     size_change_retries = 200
     file_downloading = check_for_new_file(folder)
+    print(f'wait_for_file_download_complete - {wait_thread_id} Wait for {file_downloading}')
     if not file_downloading:
         return False
     # remove the .opdownload to get the final filename
@@ -110,6 +104,7 @@ def wait_for_file_download_complete(folder, path):
         file_downloading_base = file_downloading
     current_size = -1
     while not download_complete:
+        print(f'wait_for_file_download_complete - {wait_thread_id} loop {size_change_retries} - {file_exists_retries}')
         time.sleep(3)
         if os.path.isfile(os.path.join(folder, file_downloading)):
             current_size = os.path.getsize(os.path.join(folder, file_downloading))
@@ -128,6 +123,7 @@ def wait_for_file_download_complete(folder, path):
     if (not download_complete) and ((size_change_retries < 0) or (file_exists_retries < 0)):
         raise TimeoutError(f'Max number of retries downloading {file_downloading_base}')
     remove_file_from_waiting_list_and_move(file_downloading, file_downloading_base, folder, path)
+    print(f'wait_for_file_download_complete - {wait_thread_id} file moved {file_downloading} -> {folder}')
     return True
 
 
@@ -151,6 +147,10 @@ class LibgenDownloadPool:
         It also has access to the BundleInfo dictionary to update the download status of each
         book found.
     """
+
+    thread_id_mutex = Lock()
+    download_folder_mutex = Lock()
+    pending_files_mutex = Lock()
 
     def __init__(self):
         self.__pool = ThreadPool(processes=4)
@@ -180,6 +180,8 @@ class LibgenDownloadPool:
         self.__pending_results[bundle_item][md5] = async_res
 
     def wait_for_all_threads(self):
+        print('wait_for_all_threads')
         for bundle_item, threads_waiting in self.__pending_results.items():
             for md5_wait in threads_waiting:
+                print(f'waiting for {md5_wait}')
                 self.__pending_results[bundle_item][md5_wait].wait()
