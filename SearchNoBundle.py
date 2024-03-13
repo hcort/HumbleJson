@@ -14,6 +14,7 @@ from FilterSearchResults import filter_search_results
 from HumbleJson import iterate_tiers, search_books_to_bundle_item, \
     download_books_from_bundle_item
 from LibGen import search_libgen_by_title
+from resources import humble_resources
 from utils import run_parameters
 
 
@@ -39,6 +40,14 @@ def search_without_bundle(search_items):
     for search in search_items:
         item_machine_name = slugify(f'{search["title"]}_{search["author"]}')
         bundle_mockup['tier_display_data']['all']['tier_item_machine_names'].append(item_machine_name)
+        bundle_mockup['tier_item_data'][item_machine_name] = {
+            'name': search["title"],
+            'author': search["author"],
+            'author_url': '',
+            'publisher': '',
+            'publisher_url': '',
+            'description': ''
+        }
     # save to file so it can be reprocessed another time
     backup_file = os.path.join(run_parameters['output_dir'], f'{bundle_mockup["machine_name"]}.json')
     print(f'search results saved to {backup_file}')
@@ -49,6 +58,7 @@ def search_without_bundle(search_items):
     iterate_tiers(bundle_object, functor=search_books_to_bundle_item)
     iterate_tiers(bundle_object, functor=download_books_from_bundle_item)
     bundle_object.save_to_file()
+    humble_resources.pool.wait_for_all_threads()
 
 
 def search_in_libgen(title, author):

@@ -30,7 +30,6 @@ from utils import move_file_download_folder
 wait_for_download_files = set()
 # limit the amount of simultaneous downloads
 MAX_SIMULTANEOUS_DOWNLOADS = 2
-max_download_limit = Semaphore(MAX_SIMULTANEOUS_DOWNLOADS)
 
 
 thread_id = 0
@@ -136,8 +135,8 @@ def thread_file_download(download_folder, path, bundle_dict, bundle_item, md5):
             print(f'Unable to download {bundle_item} - {md5}')
     except Exception as err:
         print(f'Error downloading {bundle_item} - {md5} - {err}', file=sys.stderr)
-    print(f'Releasing semaphore {max_download_limit}')
-    max_download_limit.release()
+    print(f'Releasing semaphore {LibgenDownloadPool.max_download_limit}')
+    LibgenDownloadPool.max_download_limit.release()
 
 
 class LibgenDownloadPool:
@@ -151,6 +150,7 @@ class LibgenDownloadPool:
     thread_id_mutex = Lock()
     download_folder_mutex = Lock()
     pending_files_mutex = Lock()
+    max_download_limit = Semaphore(MAX_SIMULTANEOUS_DOWNLOADS)
 
     def __init__(self):
         self.__pool = ThreadPool(processes=4)

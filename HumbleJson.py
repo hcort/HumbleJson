@@ -101,7 +101,7 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
     humble_resources.pool.bundle_dict = bundle_dict
     filtered_books = item['books_found']
     # print(json.dumps(filtered_books, sort_keys=True, indent=4))
-    for idx, md5 in enumerate(filtered_books):
+    for idx, md5 in enumerate(dict(filtered_books)):
         try:
             all_mirrors = get_mirror_list(filtered_books[md5]['url'])
             filtered_books[md5]['mirrors'] = all_mirrors
@@ -147,8 +147,6 @@ def main():
             archive_bundle(url)
         bundle_dict = get_bundle_dict(url, is_file=json_from_file)
         print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
-        # search_books_by_tier(bundle_dict)
-        # download_books_by_tier(bundle_dict)
         iterate_tiers(bundle_dict, functor=search_books_to_bundle_item)
         iterate_tiers(bundle_dict, functor=download_books_from_bundle_item)
         bundle_dict.save_to_file()

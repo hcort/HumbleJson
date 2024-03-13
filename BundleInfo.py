@@ -72,6 +72,10 @@ class BundleInfo:
             self.build_bundle_dict()
             self.clean_upper_tiers()
 
+    def __del__(self):
+        if self.__bundle_dict_access_mutex.locked():
+            print('bundle_dict_access_mutex - mutex bloqueado')
+
     @classmethod
     def from_file(cls, backup_file):
         with open(backup_file, 'r', encoding='utf-8') as content:

@@ -15,7 +15,6 @@ class HumbleResources:
 
     def __del__(self):
         self.__pool.wait_for_all_threads()
-        pass
 
     @property
     def driver(self):

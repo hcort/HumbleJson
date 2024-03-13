@@ -16,7 +16,6 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
 
-from Pool import max_download_limit
 from resources import humble_resources
 from utils import generate_filename
 
@@ -86,8 +85,8 @@ def get_book_selenium(css_path):
     try:
         link = humble_resources.driver.driver.find_element(By.CSS_SELECTOR, css_path)
         # delete_all_files(humble_resources.download_folder)
-        print(f'Acquiring semaphore {max_download_limit}')
-        max_download_limit.acquire()
+        print(f'Acquiring semaphore {humble_resources.pool.max_download_limit}')
+        humble_resources.pool.max_download_limit.acquire()
         link.click()
         # espero para comprobar si no me redirecciona a página de error
         time.sleep(1)
@@ -96,15 +95,15 @@ def get_book_selenium(css_path):
         return True
     except Exception as ex:
         print(f'Unable to download {download_url} - {ex}', file=sys.stderr)
-        max_download_limit.release()
+        humble_resources.pool.max_download_limit.release()
     return False
 
 
 def get_book_selenium_by_url(url):
     download_url = humble_resources.driver.driver.current_url
     try:
-        print(f'Acquiring semaphore {max_download_limit}')
-        max_download_limit.acquire()
+        print(f'Acquiring semaphore {humble_resources.pool.max_download_limit}')
+        humble_resources.pool.max_download_limit.acquire()
         humble_resources.driver.driver.get(url)
         # espero para comprobar si no me redirecciona a página de error
         time.sleep(1)
@@ -116,5 +115,5 @@ def get_book_selenium_by_url(url):
         return True
     except Exception as ex:
         print(f'Unable to download {download_url} - {ex}', file=sys.stderr)
-        max_download_limit.release()
+        humble_resources.pool.release()
     return False
