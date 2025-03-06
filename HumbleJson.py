@@ -68,7 +68,7 @@ def search_books_to_bundle_item(bundle_dict=None, key=None, index_str=''):
     item = bundle_dict['tier_item_data'].get(key, None)
     if not item:
         return
-    if item.get('downloaded', False):
+    if item.get('skip', False) or item.get('downloaded', False) or (item.get('books_found', {})):
         return
     print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     try:
@@ -92,9 +92,7 @@ def download_books_from_bundle_item(bundle_dict=None, key=None, index_str=''):
     item = bundle_dict['tier_item_data'].get(key, None)
     if not item:
         return
-    if item.get('downloaded', False):
-        return
-    if not item.get('books_found', {}):
+    if item.get('skip', False) or item.get('downloaded', False) or (not item.get('books_found', {})):
         return
     print(f'{index_str} - {item_in_bundle_dict_to_str(item)}')
     # start thread pool
@@ -147,9 +145,12 @@ def main():
             archive_bundle(url)
         bundle_dict = get_bundle_dict(url, is_file=json_from_file)
         print(f'{bundle_dict.get("name", "")}\t{bundle_dict.get("url", "")}')
-        iterate_tiers(bundle_dict, functor=search_books_to_bundle_item)
-        iterate_tiers(bundle_dict, functor=download_books_from_bundle_item)
-        bundle_dict.save_to_file()
+        if run_parameters['parse_only']:
+            print('Parsing finished, exit...')
+        else:
+            iterate_tiers(bundle_dict, functor=search_books_to_bundle_item)
+            iterate_tiers(bundle_dict, functor=download_books_from_bundle_item)
+            bundle_dict.save_to_file()
         print('\n\n\n\n\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n\n\n\n')
     humble_resources.pool.wait_for_all_threads()
 
