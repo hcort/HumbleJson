@@ -3,11 +3,20 @@
     pages are built and where each piece of data is stored
 """
 import re
-from urllib.parse import quote
 
-from Connections import get_soup_from_page
-from utils import run_parameters, libgen_search_libgen_rs, update_run_parameters, libgen_search_libgen_is, \
-    libgen_search_libgen_li, build_url, libgen_search_libgen_rc
+from annasarchive import build_search_url
+from utils import run_parameters, libgen_search_libgen_rs, libgen_search_libgen_is, \
+    libgen_search_libgen_li, build_url, libgen_search_libgen_rc, annas_archive_search
+
+
+def build_book_dict(title, author, publisher, extension, url):
+    return {
+        'title': title,
+        'author': author,
+        'publisher': publisher,
+        'extension': extension,
+        'url': url,
+    }
 
 
 class LibgenIterator:
@@ -95,6 +104,10 @@ class LibGenParser:
     def restart_iterator(self):
         raise NotImplementedError
 
+    def build_search_url(self, urlencoded_query, items_per_page, query, detailed_view):
+        return f'{run_parameters["libgen_base"]}{run_parameters["libgen_search_path"]}?&req={urlencoded_query}&' \
+               f'res={items_per_page}&column={query}&phrase=1&{detailed_view}topics%5B%5D=l&topics%5B%5D=f'
+
 
 class LibGenParserRs(LibGenParser):
     """
@@ -161,13 +174,11 @@ class LibGenParserRs(LibGenParser):
             book_url = link_to_book['href']
             book_id = self.regex_md5.search(book_url)
             if book_id:
-                books_found[book_id.group(1)] = {
-                    'title': t.text,
-                    'author': a.text,
-                    'publisher': p.text,
-                    'extension': e.text.lower(),
-                    'url': build_url(run_parameters['libgen_base'], book_url)
-                }
+                books_found[book_id.group(1)] = build_book_dict(t.text,
+                                                                a.text,
+                                                                p.text,
+                                                                e.text.lower(),
+                                                                build_url(run_parameters['libgen_base'], book_url))
             else:
                 print(f'!!!!!!!!!!!! {book_url} - {t.text} - {a.text} - {p.text}')
         return books_found
@@ -181,13 +192,12 @@ class LibGenParserRs(LibGenParser):
             book_url = t['href']
             book_id = self.regex_md5_fiction.search(book_url)
             if book_id:
-                books_found[book_id.group(1)] = {
-                    'title': t.text,
-                    'author': a.text,
-                    'publisher': '',
-                    'extension': e.text.split('/')[0].strip().lower(),
-                    'url': build_url(run_parameters['libgen_base'], book_url)
-                }
+
+                books_found[book_id.group(1)] = build_book_dict(t.text,
+                                                                a.text,
+                                                                '',
+                                                                e.text.split('/')[0].strip().lower(),
+                                                                build_url(run_parameters['libgen_base'], book_url))
             else:
                 print(f'!!!!!!!!!!!! {book_url} - {t.text} - {a.text}')
         return books_found
@@ -242,13 +252,11 @@ class LibGenParserLi(LibGenParser):
             book_id_m = self.regex_id.search(book_url)
             if book_id_m:
                 book_id = book_id_m.group(1)
-                books_found[book_id] = {
-                    'title': t.text,
-                    'author': a.text,
-                    'publisher': p.text,
-                    'extension': e.text.lower(),
-                    'url': build_url(run_parameters['libgen_base'], book_url)
-                }
+                books_found[book_id] = build_book_dict(t.text,
+                                                       a.text,
+                                                       p.text,
+                                                       e.text.lower(),
+                                                       build_url(run_parameters['libgen_base'], book_url))
             else:
                 print(f'!!!!!!!!!!!! {book_url} - {t.text} - {a.text} - {p.text}')
         return books_found
@@ -263,6 +271,58 @@ class LibGenParserLi(LibGenParser):
         return None
 
 
+class AnnasArchivesParser(LibGenParser):
+
+    def __init__(self):
+        self.__page_number = 1
+        self.__paginator = None
+
+    def get_list_results_pages(self, soup, base_url):
+        if not self.__paginator:
+            num = 1
+            self.__paginator = LibgenIterator(num, base_url)
+        return self.__paginator
+
+    def get_list_results_pages_fiction(self, soup, base_url):
+        return None
+
+    def get_non_fiction(self, soup):
+        books_found = {}
+        page_results = soup.find_all('div', {'class': 'h-[110px]'})
+        for result in page_results:
+            # título en h3
+            div = result.select('div.relative')[1]
+            title = div.find('h3').text
+            sub_divs = div.select('div')
+            info = sub_divs[0].text.split(',')  # split
+            publisher = sub_divs[1].text
+            author = sub_divs[2].text
+            link = result.find('a')['href']
+            book_id = link.split('/')[-1]
+            book_url = f'{run_parameters["libgen_base"]}{link}'
+            ext = ''
+            for i in info:
+                if i.strip().startswith('.'):
+                    ext = i.strip().replace('.', '')
+            books_found[book_id] = build_book_dict(title, author, publisher, ext, book_url)
+        return books_found
+
+    def get_fiction(self, soup):
+        return {}
+
+    def search_fiction_link(self, soup):
+        return None
+
+    def get_fiction_link(self):
+        return None
+
+    def restart_iterator(self):
+        self.__paginator = None
+
+    def build_search_url(self, urlencoded_query, items_per_page, query, detailed_view):
+        return build_search_url(urlencoded_query)
+
+
 def select_parser():
     if run_parameters['libgen_base'] == libgen_search_libgen_rs['base_url']:
         return LibGenParserRs()
@@ -272,4 +332,6 @@ def select_parser():
         return LibGenParserLi()
     if run_parameters['libgen_base'] == libgen_search_libgen_rc['base_url']:
         return LibGenParserLi()
+    if run_parameters['libgen_base'] == annas_archive_search['base_url']:
+        return AnnasArchivesParser()
     return None

@@ -13,8 +13,9 @@ libgen_search_libgen_rs = dict(base_url='https://libgen.rs/', search_path='searc
 libgen_search_libgen_is = dict(base_url='https://libgen.is/', search_path='search.php')
 libgen_search_libgen_li = dict(base_url='https://libgen.li/', search_path='index.php')
 libgen_search_libgen_rc = dict(base_url='https://libgen.rocks/', search_path='index.php')
+annas_archive_search    = dict(base_url='https://es.annas-archive.org/', search_path='search', do_scroll=True)
 
-libgen_search = libgen_search_libgen_rs
+libgen_search = annas_archive_search
 
 run_parameters = {
     'bundles': [],
@@ -24,7 +25,8 @@ run_parameters = {
     'libgen_mirrors': [],
     # 'libgen_download': 'cloudflare',
     'output_dir': '',
-    'archive': False
+    'archive': False,
+    'parse_only': False
 }
 
 
@@ -88,8 +90,8 @@ def display_help():
 
 def parse_arguments():
     argument_list = sys.argv[1:]
-    options = 'hu:f:ao:l:'
-    long_options = ['help', 'urls=', 'files=', 'archive',  'out=', 'libgen=', 'file=']
+    options = 'hu:f:ao:l:p'
+    long_options = ['help', 'urls=', 'files=', 'archive',  'out=', 'libgen=', 'file=', 'parse']
     try:
         arguments, values = getopt.getopt(argument_list, options, long_options)
         for current_argument, current_value in arguments:
@@ -105,6 +107,8 @@ def parse_arguments():
                 run_parameters['output_dir'] = current_value
             elif current_argument in ('-l', long_options[4]):
                 run_parameters['libgen_base'] = current_value
+            elif current_argument in ('-p', long_options[5]):
+                run_parameters['parse_only'] = True
     except getopt.error as err:
         # output error, and return with an error code
         print(str(err))

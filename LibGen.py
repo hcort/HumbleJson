@@ -36,6 +36,8 @@ def get_books_no_fiction(parser, search_parameter):
     detailed_view = ''
     search_url = f'{run_parameters["libgen_base"]}{run_parameters["libgen_search_path"]}?&req={urlencoded_query}&' \
                  f'res={items_per_page}&column={query}&phrase=1&{detailed_view}topics%5B%5D=l&topics%5B%5D=f'
+
+    search_url = parser.build_search_url(urlencoded_query, items_per_page, query, detailed_view)
     all_books = {}
     page_number = 1
     url_with_page = f'{search_url}&page={page_number}'
@@ -58,7 +60,10 @@ def get_books_no_fiction(parser, search_parameter):
 
 def get_books_fiction(parser):
     all_books = {}
-    search_url = f'{run_parameters["libgen_base"]}{parser.get_fiction_link()}'
+    fiction_link = parser.get_fiction_link()
+    if not fiction_link:
+        return all_books
+    search_url = f'{run_parameters["libgen_base"]}{fiction_link}'
     page_number = 1
     url_with_page = f'{search_url}&page={page_number}'
     soup = get_soup_from_page(url_with_page)

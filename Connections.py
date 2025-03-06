@@ -12,12 +12,32 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from requests import codes
+import selenium
+if selenium.__version__ == '3.141.0':
+    from selenium.webdriver.common.keys import Keys
+else:
+    from selenium.webdriver import Keys
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
 
 from resources import humble_resources
-from utils import generate_filename
+from utils import generate_filename, libgen_search
+
+
+def scroll_to_end():
+    if not libgen_search.get('do_scroll', False):
+        return
+    keep_scrolling = True
+    i = 3
+    while keep_scrolling:
+        try:
+            humble_resources.driver.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.END)
+            time.sleep(1)
+            i -= 1
+            keep_scrolling = i >= 0
+        except NoSuchElementException:
+            keep_scrolling = False
 
 
 def get_soup_from_page(current_url, use_opera_vpn=True):
@@ -39,6 +59,8 @@ def get_soup_from_page_requests(current_url):
 def get_soup_from_page_selenium(current_url):
     humble_resources.driver.driver.set_page_load_timeout(3000)
     humble_resources.driver.driver.get(current_url)
+    # FIXME anna's archive -> necesita scroll
+    scroll_to_end()
     soup = BeautifulSoup(humble_resources.driver.driver.page_source, 'html.parser', from_encoding='utf-8')
     return soup
 

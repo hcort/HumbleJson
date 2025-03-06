@@ -76,6 +76,6 @@ def search_in_libgen(title, author):
 if __name__ == '__main__':
     run_parameters['output_dir'] = r'F:\bkp\libros\bundles'
     list_of_searches = [
-        {'title': 'consider the lobster', 'author': 'Foster Wallace'}
+        {'title': 'Castle of Days', 'author': 'Wolfe'}
     ]
     search_without_bundle(search_items=list_of_searches)

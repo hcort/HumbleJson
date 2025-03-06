@@ -93,6 +93,11 @@ class BundleInfo:
     def get(self, key, default=None):
         return self.__dict.get(key, default)
 
+    def get_book(self, key):
+        if key in self.__dict['tier_item_data']:
+            return self.__dict['tier_item_data'][key]
+        return {}
+
     def build_bundle_dict(self):
         humble_items = self.__dict['tier_item_data']
         items_dict = {}
@@ -163,9 +168,12 @@ class BundleInfo:
 
     def set_book_downloaded(self, key, book_md5):
         with self.__bundle_dict_access_mutex:
-            self.__dict['tier_item_data'][key]['books_found'].pop(book_md5)
+            downloaded_book = self.__dict['tier_item_data'][key]['books_found'].pop(book_md5)
             if not self.__dict['tier_item_data'][key]['books_found']:
                 self.__dict['tier_item_data'][key]['downloaded'] = True
+            if not self.__dict['tier_item_data'][key].get('books_downloaded', None):
+                self.__dict['tier_item_data'][key]['books_downloaded'] = {}
+            self.__dict['tier_item_data'][key]['books_downloaded'][book_md5] = downloaded_book
             self.save_to_file(lock=False)
 
     def set_all_books_downloaded(self, key, downloaded=True):

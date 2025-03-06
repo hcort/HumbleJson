@@ -12,9 +12,10 @@ from urllib.parse import urlparse
 from bs4 import Tag
 
 from Connections import get_soup_from_page, get_book_requests, get_book_selenium, get_book_selenium_by_url
+from annasarchive import get_annas_archive_mirrors, get_download_link_from_annas_archive
 from resources import humble_resources
 from utils import run_parameters, libgen_search_libgen_rs, libgen_search_libgen_li, libgen_search_libgen_is, \
-    libgen_search_libgen_rc
+    libgen_search_libgen_rc, annas_archive_search
 
 
 def get_output_path(run_parameters, bundle_name):
@@ -46,6 +47,8 @@ def get_mirror_list(libgen_md5_url=''):
             url_part = urlparse(libgen_md5_url)
             mirror_host = f'{url_part.scheme}://{url_part.hostname}/'
             mirrors = []
+            if mirror_host.find(annas_archive_search['base_url']) >= 0:
+                return get_annas_archive_mirrors(soup, mirror_host, url_part.path.split('/')[-1])
             if ((mirror_host == libgen_search_libgen_rs['base_url']) or
                     (mirror_host == libgen_search_libgen_is['base_url'])):
                 if libgen_md5_url.find('/fiction/') >= 0:
@@ -191,6 +194,10 @@ def get_file_from_url(run_parameters, bundle_data, bundle_item, book, md5):
                                                    bundle_item=bundle_item, book=book, md5=md5, path=path)
     if mirror_link.find('cloudflare') >= 0:
         return get_download_link_from_cloudfare_mirror(url=mirror_link,
+                                                   run_parameters=run_parameters, bundle_data=bundle_data,
+                                                   bundle_item=bundle_item, book=book, md5=md5, path=path)
+    if mirror_link.find('annas-archive') >= 0:
+        return get_download_link_from_annas_archive(url=mirror_link,
                                                    run_parameters=run_parameters, bundle_data=bundle_data,
                                                    bundle_item=bundle_item, book=book, md5=md5, path=path)
 
